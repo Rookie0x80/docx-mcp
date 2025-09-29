@@ -1,0 +1,162 @@
+# DOCX-MCP Feature Matrix
+
+## 🎯 Current Capabilities (Phase 1) ✅
+
+### Document Management
+| Feature | Status | Description | API |
+|---------|--------|-------------|-----|
+| Open Document | ✅ | Open existing or create new .docx files | `open_document()` |
+| Save Document | ✅ | Save document with optional rename | `save_document()` |
+| Document Info | ✅ | Get metadata (tables, paragraphs, etc.) | `get_document_info()` |
+| Document Validation | ✅ | File path and format validation | Built-in |
+
+### Table Structure Operations
+| Feature | Status | Description | API |
+|---------|--------|-------------|-----|
+| Create Table | ✅ | Create tables with custom dimensions | `create_table()` |
+| Delete Table | ✅ | Remove tables by index | `delete_table()` |
+| Add Rows | ✅ | Insert rows at any position | `add_table_rows()` |
+| Add Columns | ✅ | Insert columns at any position | `add_table_columns()` |
+| Delete Rows | ✅ | Remove multiple rows by index | `delete_table_rows()` |
+| Header Support | ✅ | Create tables with header rows | `create_table(headers=...)` |
+
+### Table Data Operations
+| Feature | Status | Description | API |
+|---------|--------|-------------|-----|
+| Set Cell Value | ✅ | Update individual cell content | `set_cell_value()` |
+| Get Cell Value | ✅ | Read individual cell content | `get_cell_value()` |
+| Get Table Data | ✅ | Export entire table in multiple formats | `get_table_data()` |
+| List Tables | ✅ | Enumerate all tables with metadata | `list_tables()` |
+| Multiple Formats | ✅ | Array, Object, CSV export formats | `format` parameter |
+
+### Error Handling & Validation
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Custom Exceptions | ✅ | Specific error types for different failures |
+| Input Validation | ✅ | Parameter validation with clear error messages |
+| Graceful Degradation | ✅ | Partial success handling |
+| Comprehensive Logging | ✅ | Detailed operation logging |
+
+## 🚧 Phase 2 - Advanced Table Features (In Development)
+
+### Table Formatting & Styling
+| Feature | Status | Priority | Target | Description |
+|---------|--------|----------|--------|-------------|
+| Cell Text Formatting | 🔄 | Critical | 2.1 | Bold, italic, font family/size, color |
+| Cell Alignment | 🔄 | Critical | 2.1 | Horizontal and vertical text alignment |
+| Cell Borders | 🔄 | High | 2.1 | Border styles, width, colors |
+| Cell Background | 🔄 | High | 2.1 | Background colors and patterns |
+| Row Height Control | 📋 | High | 2.2 | Auto, fixed, minimum row heights |
+| Column Width Control | 📋 | High | 2.2 | Auto, fixed, percentage widths |
+| Table Positioning | 📋 | Medium | 2.2 | Table alignment and text wrapping |
+| Table Styles | 📋 | Medium | 2.3 | Predefined table themes |
+| Conditional Formatting | 📋 | Low | 2.3 | Rules-based cell formatting |
+
+### Data Import/Export
+| Feature | Status | Priority | Target | Description |
+|---------|--------|----------|--------|-------------|
+| CSV Import | 📋 | Critical | 2.4 | Import CSV files to tables |
+| Excel Import | 📋 | High | 2.4 | Import .xlsx/.xls files |
+| JSON Import | 📋 | High | 2.4 | Import structured JSON data |
+| Enhanced CSV Export | 📋 | Medium | 2.5 | Export with formatting options |
+| Excel Export | 📋 | Medium | 2.5 | Export to .xlsx with formatting |
+| JSON Export | 📋 | Medium | 2.5 | Export with custom schemas |
+| Batch Operations | 📋 | High | 2.6 | Multi-cell/table operations |
+| Data Type Inference | 📋 | Medium | 2.4 | Automatic data type detection |
+
+### Table Search & Query
+| Feature | Status | Priority | Target | Description |
+|---------|--------|----------|--------|-------------|
+| Cell Content Search | 📋 | High | 2.7 | Find text in table cells |
+| Cross-table Search | 📋 | Medium | 2.7 | Search across multiple tables |
+| Regular Expression | 📋 | Medium | 2.7 | Regex pattern matching |
+| Search & Replace | 📋 | High | 2.7 | Replace found content |
+| Column Filtering | 📋 | High | 2.8 | Filter rows by column criteria |
+| Multi-column Sorting | 📋 | High | 2.8 | Sort by multiple columns |
+| Data Validation | 📋 | Medium | 2.9 | Validate cell content |
+| Custom Filters | 📋 | Low | 2.8 | User-defined filter functions |
+
+## 🔮 Phase 3 - Extended Table Features (Future)
+
+### Table Templates & Automation
+| Feature | Status | Priority | Description |
+|---------|--------|----------|-------------|
+| Template Library | 📋 | Medium | Predefined table layouts |
+| Custom Templates | 📋 | Medium | User-defined table templates |
+| Auto-generation | 📋 | High | Generate tables from data schemas |
+| Template Variables | 📋 | Low | Dynamic content in templates |
+
+### Advanced Operations
+| Feature | Status | Priority | Description |
+|---------|--------|----------|-------------|
+| Cell Merging | 📋 | High | Merge and split table cells |
+| Table Relationships | 📋 | Medium | Cross-table data references |
+| Basic Formulas | 📋 | High | SUM, AVERAGE, COUNT functions |
+| Calculated Fields | 📋 | Medium | Dynamic calculated columns |
+
+### Performance & Optimization
+| Feature | Status | Priority | Description |
+|---------|--------|----------|-------------|
+| Lazy Loading | 📋 | Medium | Load large tables on demand |
+| Caching | 📋 | High | Cache frequently accessed data |
+| Async Operations | 📋 | High | Non-blocking operations |
+| Batch Processing | 📋 | High | Optimize bulk operations |
+
+## 🌟 Phase 4+ - Document Operations (Long-term)
+
+### Content Management
+| Feature | Status | Priority | Description |
+|---------|--------|----------|-------------|
+| Text Operations | 📋 | Medium | Insert, format, manipulate text |
+| Paragraph Management | 📋 | Medium | Paragraph styling and structure |
+| List Operations | 📋 | Low | Bullets, numbering, nested lists |
+| Document Structure | 📋 | Medium | Headings, sections, TOC |
+
+### Media & Objects
+| Feature | Status | Priority | Description |
+|---------|--------|----------|-------------|
+| Image Insertion | 📋 | Low | Add and position images |
+| Chart Generation | 📋 | Medium | Create charts from table data |
+| Shapes & Objects | 📋 | Low | Drawing objects and shapes |
+| Hyperlinks | 📋 | Low | Links and bookmarks |
+
+### Enterprise Features
+| Feature | Status | Priority | Description |
+|---------|--------|----------|-------------|
+| Security | 📋 | Low | Document encryption, permissions |
+| Audit Logging | 📋 | Low | Track all document operations |
+| Plugin System | 📋 | Low | Extensible architecture |
+| Multi-document | 📋 | Low | Operations across multiple files |
+
+## 📊 Legend
+
+| Symbol | Meaning |
+|--------|---------|
+| ✅ | Complete and tested |
+| 🔄 | In active development |
+| 📋 | Planned/Not started |
+| ❌ | Blocked/Cancelled |
+| 🔍 | Under investigation |
+
+## 🎯 Priority Levels
+
+- **Critical**: Essential for basic functionality
+- **High**: Important for user productivity  
+- **Medium**: Nice to have, enhances experience
+- **Low**: Future enhancement, not immediately needed
+
+## 📅 Target Milestones
+
+- **2.1**: Cell formatting and basic styling
+- **2.2**: Layout control and positioning
+- **2.3**: Advanced styling and themes
+- **2.4**: Import operations
+- **2.5**: Export operations  
+- **2.6**: Bulk operations
+- **2.7**: Search functionality
+- **2.8**: Filtering and sorting
+- **2.9**: Data validation
+
+---
+
+*This feature matrix is updated regularly to reflect current development status and priorities.*
