@@ -77,10 +77,15 @@
 ### Table Search & Query
 | Feature | Status | Priority | Target | Description |
 |---------|--------|----------|--------|-------------|
-| Cell Content Search | 📋 | High | 2.7 | Find text in table cells |
-| Cross-table Search | 📋 | Medium | 2.7 | Search across multiple tables |
-| Regular Expression | 📋 | Medium | 2.7 | Regex pattern matching |
-| Search & Replace | 📋 | High | 2.7 | Replace found content |
+| Cell Content Search | ✅ | High | 2.7 | Find text in table cells |
+| Cross-table Search | ✅ | Medium | 2.7 | Search across multiple tables |
+| Header-specific Search | ✅ | High | 2.7 | Search only in table headers |
+| Regular Expression | ✅ | Medium | 2.7 | Regex pattern matching |
+| Multiple Search Modes | ✅ | High | 2.7 | Exact, contains, regex modes |
+| Case Sensitivity | ✅ | Medium | 2.7 | Case-sensitive/insensitive options |
+| Result Limiting | ✅ | Medium | 2.7 | Limit number of search results |
+| Table Filtering | ✅ | High | 2.7 | Search specific tables only |
+| Search & Replace | 📋 | High | 2.8 | Replace found content |
 | Column Filtering | 📋 | High | 2.8 | Filter rows by column criteria |
 | Multi-column Sorting | 📋 | High | 2.8 | Sort by multiple columns |
 | Data Validation | 📋 | Medium | 2.9 | Validate cell content |
@@ -157,13 +162,13 @@
 
 ## 📅 Target Milestones
 
-- **2.1**: Cell formatting and basic styling
+- **2.1**: Cell formatting and basic styling ✅ **COMPLETED**
 - **2.2**: Layout control and positioning
 - **2.3**: Advanced styling and themes
 - **2.4**: Import operations
 - **2.5**: Export operations  
 - **2.6**: Bulk operations
-- **2.7**: Search functionality
+- **2.7**: Search functionality ✅ **COMPLETED**
 - **2.8**: Filtering and sorting
 - **2.9**: Data validation
 

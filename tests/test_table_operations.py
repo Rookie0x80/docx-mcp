@@ -1,6 +1,7 @@
 """Tests for table operations."""
 
 import pytest
+import re
 from docx_mcp.models.responses import ResponseStatus
 
 
@@ -324,4 +325,270 @@ class TestErrorHandling:
         
         # Test out of range coordinates
         result = table_operations.set_cell_value(str(test_doc_path), 0, 999, 999, "value")
+        assert result.status == ResponseStatus.ERROR
+
+
+class TestTableSearchOperations:
+    """Test table search operations."""
+
+    @pytest.mark.unit
+    def test_search_table_content_basic(self, document_manager, table_operations, test_doc_path):
+        """Test basic table content search."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        # Create table with test data
+        table_operations.create_table(str(test_doc_path), rows=3, cols=3, headers=["Name", "Age", "City"])
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 0, "Alice")
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 1, "25")
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 2, "New York")
+        table_operations.set_cell_value(str(test_doc_path), 0, 2, 0, "Bob")
+        table_operations.set_cell_value(str(test_doc_path), 0, 2, 1, "30")
+        table_operations.set_cell_value(str(test_doc_path), 0, 2, 2, "Boston")
+        
+        # Search for "Alice"
+        result = table_operations.search_table_content(str(test_doc_path), "Alice")
+        
+        assert result.status == ResponseStatus.SUCCESS
+        assert result.data['total_matches'] == 1
+        assert len(result.data['matches']) == 1
+        assert result.data['matches'][0]['table_index'] == 0
+        assert result.data['matches'][0]['row_index'] == 1
+        assert result.data['matches'][0]['column_index'] == 0
+        assert result.data['matches'][0]['cell_value'] == "Alice"
+        assert result.data['matches'][0]['match_text'] == "Alice"
+
+    @pytest.mark.unit
+    def test_search_table_content_contains_mode(self, document_manager, table_operations, test_doc_path):
+        """Test table content search with contains mode."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        # Create table with test data
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        table_operations.set_cell_value(str(test_doc_path), 0, 0, 0, "Hello World")
+        table_operations.set_cell_value(str(test_doc_path), 0, 0, 1, "Testing")
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 0, "World Peace")
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 1, "Python")
+        
+        # Search for "World" - should find 2 matches
+        result = table_operations.search_table_content(str(test_doc_path), "World", search_mode="contains")
+        
+        assert result.status == ResponseStatus.SUCCESS
+        assert result.data['total_matches'] == 2
+        assert result.data['search_mode'] == "contains"
+        
+        # Check that both matches are found
+        matches = result.data['matches']
+        assert len(matches) == 2
+        
+        # First match in "Hello World"
+        assert matches[0]['cell_value'] == "Hello World"
+        assert matches[0]['match_text'] == "World"
+        
+        # Second match in "World Peace"
+        assert matches[1]['cell_value'] == "World Peace"
+        assert matches[1]['match_text'] == "World"
+
+    @pytest.mark.unit
+    def test_search_table_content_exact_mode(self, document_manager, table_operations, test_doc_path):
+        """Test table content search with exact mode."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        # Create table with test data
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        table_operations.set_cell_value(str(test_doc_path), 0, 0, 0, "Test")
+        table_operations.set_cell_value(str(test_doc_path), 0, 0, 1, "Testing")
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 0, "Test")
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 1, "Different")
+        
+        # Search for exact "Test" - should find 2 matches
+        result = table_operations.search_table_content(str(test_doc_path), "Test", search_mode="exact")
+        
+        assert result.status == ResponseStatus.SUCCESS
+        assert result.data['total_matches'] == 2
+        assert result.data['search_mode'] == "exact"
+        
+        # Verify matches
+        for match in result.data['matches']:
+            assert match['cell_value'] == "Test"
+            assert match['match_text'] == "Test"
+
+    @pytest.mark.unit
+    def test_search_table_content_regex_mode(self, document_manager, table_operations, test_doc_path):
+        """Test table content search with regex mode."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        # Create table with test data
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        table_operations.set_cell_value(str(test_doc_path), 0, 0, 0, "email@test.com")
+        table_operations.set_cell_value(str(test_doc_path), 0, 0, 1, "user@example.org")
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 0, "not-an-email")
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 1, "admin@site.net")
+        
+        # Search for email pattern
+        email_pattern = r'\w+@\w+\.\w+'
+        result = table_operations.search_table_content(str(test_doc_path), email_pattern, search_mode="regex")
+        
+        assert result.status == ResponseStatus.SUCCESS
+        assert result.data['total_matches'] == 3
+        assert result.data['search_mode'] == "regex"
+        
+        # Check that all email addresses are found
+        email_matches = [match['cell_value'] for match in result.data['matches']]
+        assert "email@test.com" in email_matches
+        assert "user@example.org" in email_matches
+        assert "admin@site.net" in email_matches
+        assert "not-an-email" not in email_matches
+
+    @pytest.mark.unit
+    def test_search_table_content_case_sensitive(self, document_manager, table_operations, test_doc_path):
+        """Test table content search with case sensitivity."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        # Create table with test data
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        table_operations.set_cell_value(str(test_doc_path), 0, 0, 0, "Test")
+        table_operations.set_cell_value(str(test_doc_path), 0, 0, 1, "test")
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 0, "TEST")
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 1, "Testing")
+        
+        # Case sensitive search for "test"
+        result = table_operations.search_table_content(str(test_doc_path), "test", case_sensitive=True)
+        
+        assert result.status == ResponseStatus.SUCCESS
+        assert result.data['total_matches'] == 1
+        assert result.data['case_sensitive'] is True
+        assert result.data['matches'][0]['cell_value'] == "test"
+        
+        # Case insensitive search for "test"
+        result = table_operations.search_table_content(str(test_doc_path), "test", case_sensitive=False)
+        
+        assert result.status == ResponseStatus.SUCCESS
+        assert result.data['total_matches'] == 4  # "Test", "test", "TEST", "Testing"
+        assert result.data['case_sensitive'] is False
+
+    @pytest.mark.unit
+    def test_search_table_content_specific_tables(self, document_manager, table_operations, test_doc_path):
+        """Test searching specific tables only."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        # Create two tables
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        table_operations.set_cell_value(str(test_doc_path), 0, 0, 0, "Table1Data")
+        
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        table_operations.set_cell_value(str(test_doc_path), 1, 0, 0, "Table2Data")
+        
+        # Search only in table 0
+        result = table_operations.search_table_content(str(test_doc_path), "Data", table_indices=[0])
+        
+        assert result.status == ResponseStatus.SUCCESS
+        assert result.data['total_matches'] == 1
+        assert result.data['matches'][0]['table_index'] == 0
+        assert result.data['tables_searched'] == [0]
+        
+        # Search only in table 1
+        result = table_operations.search_table_content(str(test_doc_path), "Data", table_indices=[1])
+        
+        assert result.status == ResponseStatus.SUCCESS
+        assert result.data['total_matches'] == 1
+        assert result.data['matches'][0]['table_index'] == 1
+        assert result.data['tables_searched'] == [1]
+
+    @pytest.mark.unit
+    def test_search_table_content_max_results(self, document_manager, table_operations, test_doc_path):
+        """Test limiting search results."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        # Create table with multiple matches
+        table_operations.create_table(str(test_doc_path), rows=3, cols=3)
+        for row in range(3):
+            for col in range(3):
+                table_operations.set_cell_value(str(test_doc_path), 0, row, col, f"test{row}{col}")
+        
+        # Search with limit
+        result = table_operations.search_table_content(str(test_doc_path), "test", max_results=5)
+        
+        assert result.status == ResponseStatus.SUCCESS
+        assert result.data['total_matches'] == 5  # Limited to 5
+        assert len(result.data['matches']) == 5
+
+    @pytest.mark.unit
+    def test_search_table_headers(self, document_manager, table_operations, test_doc_path):
+        """Test searching table headers specifically."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        # Create table with headers
+        table_operations.create_table(str(test_doc_path), rows=3, cols=3, headers=["Name", "Email", "Phone"])
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 0, "Alice")
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 1, "alice@email.com")
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 2, "123-456-7890")
+        
+        # Search for "Email" in headers
+        result = table_operations.search_table_headers(str(test_doc_path), "Email")
+        
+        assert result.status == ResponseStatus.SUCCESS
+        assert result.data['total_matches'] == 1
+        assert result.data['matches'][0]['table_index'] == 0
+        assert result.data['matches'][0]['row_index'] == 0  # Header row
+        assert result.data['matches'][0]['column_index'] == 1
+        assert result.data['matches'][0]['cell_value'] == "Email"
+        assert result.data['summary']['search_type'] == "headers_only"
+
+    @pytest.mark.unit
+    def test_search_table_content_empty_query(self, document_manager, table_operations, test_doc_path):
+        """Test search with empty query."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        
+        # Test empty query
+        result = table_operations.search_table_content(str(test_doc_path), "")
+        assert result.status == ResponseStatus.ERROR
+        assert "empty" in result.message.lower()
+        
+        # Test whitespace-only query
+        result = table_operations.search_table_content(str(test_doc_path), "   ")
+        assert result.status == ResponseStatus.ERROR
+        assert "empty" in result.message.lower()
+
+    @pytest.mark.unit
+    def test_search_table_content_invalid_mode(self, document_manager, table_operations, test_doc_path):
+        """Test search with invalid search mode."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        
+        result = table_operations.search_table_content(str(test_doc_path), "test", search_mode="invalid")
+        assert result.status == ResponseStatus.ERROR
+        assert "Invalid search mode" in result.message
+
+    @pytest.mark.unit
+    def test_search_table_content_invalid_regex(self, document_manager, table_operations, test_doc_path):
+        """Test search with invalid regex pattern."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        
+        # Invalid regex pattern
+        result = table_operations.search_table_content(str(test_doc_path), "[invalid", search_mode="regex")
+        assert result.status == ResponseStatus.ERROR
+        assert "Invalid regex pattern" in result.message
+
+    @pytest.mark.unit
+    def test_search_table_content_no_tables(self, document_manager, table_operations, test_doc_path):
+        """Test search in document with no tables."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        result = table_operations.search_table_content(str(test_doc_path), "test")
+        
+        assert result.status == ResponseStatus.SUCCESS
+        assert result.data['total_matches'] == 0
+        assert len(result.data['matches']) == 0
+        assert result.data['summary']['tables_with_matches'] == 0
+
+    @pytest.mark.unit
+    def test_search_table_content_invalid_table_indices(self, document_manager, table_operations, test_doc_path):
+        """Test search with invalid table indices."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        
+        # Test invalid table index
+        result = table_operations.search_table_content(str(test_doc_path), "test", table_indices=[999])
         assert result.status == ResponseStatus.ERROR

@@ -211,6 +211,10 @@ All tools accept JSON parameters and return JSON responses, making them compatib
 ### Query Operations
 - `list_tables(file_path, include_summary=True)` - List all tables in document
 
+### Table Search Operations (New in Phase 2.7!)
+- `search_table_content(file_path, query, search_mode="contains", case_sensitive=False, table_indices=None, max_results=None)` - Search for content within table cells
+- `search_table_headers(file_path, query, search_mode="contains", case_sensitive=False)` - Search specifically in table headers
+
 ### Cell Formatting Operations (New in Phase 2.1!)
 - `format_cell_text(file_path, table_index, row_index, column_index, ...)` - Format text in cell
 - `format_cell_alignment(file_path, table_index, row_index, column_index, horizontal, vertical)` - Set cell alignment
@@ -277,9 +281,34 @@ Language models can call these tools with JSON parameters:
 }
 ```
 
+**New! Table Search Examples:**
+```json
+{
+  "tool": "search_table_content",
+  "parameters": {
+    "file_path": "report.docx",
+    "query": "Alice",
+    "search_mode": "contains",
+    "case_sensitive": false,
+    "max_results": 10
+  }
+}
+```
+
+```json
+{
+  "tool": "search_table_headers",
+  "parameters": {
+    "file_path": "report.docx",
+    "query": "Email",
+    "search_mode": "exact"
+  }
+}
+```
+
 ## 🧪 Testing
 
-The project uses pytest for comprehensive testing with 58 test cases covering all functionality.
+The project uses pytest for comprehensive testing with 71 test cases covering all functionality.
 
 Run all tests:
 ```bash
@@ -324,8 +353,13 @@ pytest -v
   - [ ] Enhanced export with formatting preservation
   - [ ] Bulk cell data operations
 
-- [ ] **Table Search & Query**
-  - [ ] Search content across all table cells
+- [x] **Table Search & Query** ✅ **COMPLETED**
+  - [x] Search content across all table cells
+  - [x] Search specifically in table headers
+  - [x] Multiple search modes (exact, contains, regex)
+  - [x] Case-sensitive and case-insensitive search
+  - [x] Search specific tables or all tables
+  - [x] Limit search results
   - [ ] Filter table rows by column criteria
   - [ ] Sort table data by column values
   - [ ] Find and replace in table content
@@ -473,23 +507,23 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 📊 Project Status
 
-### ✅ Current Capabilities (Phase 1 + 2.1)
-- **🧪 Test Coverage**: 58/58 tests passing (100%)
-- **🛠️ MCP Tools**: 15 available tools (11 core + 4 formatting)
+### ✅ Current Capabilities (Phase 1 + 2.1 + 2.7)
+- **🧪 Test Coverage**: 71/71 tests passing (100%)
+- **🛠️ MCP Tools**: 17 available tools (11 core + 4 formatting + 2 search)
 - **📦 Modules**: 7 core modules with clean architecture
 - **🎨 Formatting**: Complete cell formatting support
+- **🔍 Search**: Comprehensive table search capabilities
 - **📚 Documentation**: Comprehensive API docs and examples
 
-### 🚀 Recent Additions (Phase 2.1)
-- ✅ **Cell Text Formatting**: Font, size, color, bold, italic, underline
-- ✅ **Cell Alignment**: Horizontal and vertical positioning
-- ✅ **Background Colors**: Hex color support for cell backgrounds
-- ✅ **Cell Borders**: Customizable styles, widths, and colors
-- ✅ **Complete Formatting**: Apply all formatting options at once
+### 🚀 Recent Additions (Phase 2.7)
+- ✅ **Table Content Search**: Search across all table cells with multiple modes
+- ✅ **Header Search**: Search specifically in table headers
+- ✅ **Search Modes**: Exact match, contains, and regex pattern matching
+- ✅ **Search Options**: Case sensitivity, table filtering, result limiting
+- ✅ **Detailed Results**: Complete match information with table/cell positions
 
 ### 🎯 Next Milestones
 - **Phase 2.2**: Data import/export (CSV, Excel, JSON)
-- **Phase 2.3**: Table search and query capabilities
 - **Phase 3**: Advanced table features and templates
 
 ---

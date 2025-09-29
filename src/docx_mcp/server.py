@@ -288,6 +288,61 @@ def list_tables(
     return result.to_dict()
 
 
+# Table search operations
+@mcp.tool()
+def search_table_content(
+    file_path: str,
+    query: str,
+    search_mode: str = "contains",
+    case_sensitive: bool = False,
+    table_indices: Optional[List[int]] = None,
+    max_results: Optional[int] = None
+) -> Dict[str, Any]:
+    """Search for content within table cells across all or specified tables.
+    
+    Args:
+        file_path: Path to the document file
+        query: Search query string
+        search_mode: Search mode ("exact", "contains", "regex")
+        case_sensitive: Whether search is case sensitive
+        table_indices: Optional list of table indices to search (None = all tables)
+        max_results: Maximum number of results to return (None = no limit)
+    """
+    result = table_operations.search_table_content(
+        file_path,
+        query,
+        search_mode,
+        case_sensitive,
+        table_indices,
+        max_results
+    )
+    return result.to_dict()
+
+
+@mcp.tool()
+def search_table_headers(
+    file_path: str,
+    query: str,
+    search_mode: str = "contains",
+    case_sensitive: bool = False
+) -> Dict[str, Any]:
+    """Search specifically in table headers (first row of each table).
+    
+    Args:
+        file_path: Path to the document file
+        query: Search query string
+        search_mode: Search mode ("exact", "contains", "regex")
+        case_sensitive: Whether search is case sensitive
+    """
+    result = table_operations.search_table_headers(
+        file_path,
+        query,
+        search_mode,
+        case_sensitive
+    )
+    return result.to_dict()
+
+
 # Cell formatting operations
 @mcp.tool()
 def format_cell_text(

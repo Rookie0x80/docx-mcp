@@ -1,12 +1,13 @@
 """Table operations for Word documents."""
 
+import re
 from typing import List, Optional, Dict, Any, Union
 from docx import Document
 from docx.table import Table, _Cell
 from docx.shared import Inches
 
 from ...models.responses import OperationResponse
-from ...models.tables import TableInfo, CellPosition, SearchResult, TableData
+from ...models.tables import TableInfo, CellPosition, SearchResult, TableData, TableSearchMatch, TableSearchResult
 from ...utils.exceptions import (
     TableNotFoundError,
     InvalidTableIndexError,
@@ -574,3 +575,286 @@ class TableOperations:
             
         except Exception as e:
             return OperationResponse.error(f"Failed to list tables: {str(e)}")
+    
+    def search_table_content(
+        self,
+        file_path: str,
+        query: str,
+        search_mode: str = "contains",
+        case_sensitive: bool = False,
+        table_indices: Optional[List[int]] = None,
+        max_results: Optional[int] = None
+    ) -> OperationResponse:
+        """
+        Search for content within table cells.
+        
+        Args:
+            file_path: Path to the document
+            query: Search query string
+            search_mode: Search mode ("exact", "contains", "regex")
+            case_sensitive: Whether search is case sensitive
+            table_indices: Optional list of table indices to search (None = all tables)
+            max_results: Maximum number of results to return (None = no limit)
+            
+        Returns:
+            OperationResponse with search results
+        """
+        try:
+            if not query.strip():
+                return OperationResponse.error("Search query cannot be empty")
+            
+            valid_modes = ["exact", "contains", "regex"]
+            if search_mode not in valid_modes:
+                return OperationResponse.error(f"Invalid search mode. Valid options: {', '.join(valid_modes)}")
+            
+            document = self.document_manager.get_document(file_path)
+            if not document:
+                return OperationResponse.error(f"Document not loaded: {file_path}")
+            
+            # Determine which tables to search
+            if table_indices is None:
+                tables_to_search = list(range(len(document.tables)))
+            else:
+                # Validate table indices
+                for idx in table_indices:
+                    validate_table_index(idx, len(document.tables))
+                tables_to_search = table_indices
+            
+            matches = []
+            summary = {
+                "tables_with_matches": 0,
+                "matches_per_table": {},
+                "total_cells_searched": 0
+            }
+            
+            # Compile regex pattern if needed
+            pattern = None
+            if search_mode == "regex":
+                try:
+                    flags = 0 if case_sensitive else re.IGNORECASE
+                    pattern = re.compile(query, flags)
+                except re.error as e:
+                    return OperationResponse.error(f"Invalid regex pattern: {str(e)}")
+            
+            # Search each table
+            for table_idx in tables_to_search:
+                table = document.tables[table_idx]
+                table_matches = 0
+                
+                for row_idx, row in enumerate(table.rows):
+                    for col_idx, cell in enumerate(row.cells):
+                        cell_text = cell.text
+                        summary["total_cells_searched"] += 1
+                        
+                        # Perform search based on mode
+                        cell_matches = self._search_cell_content(
+                            cell_text, query, search_mode, case_sensitive, pattern
+                        )
+                        
+                        # Create match objects
+                        for match_info in cell_matches:
+                            if max_results and len(matches) >= max_results:
+                                break
+                                
+                            match = TableSearchMatch(
+                                table_index=table_idx,
+                                row_index=row_idx,
+                                column_index=col_idx,
+                                cell_value=cell_text,
+                                match_text=match_info["text"],
+                                match_start=match_info["start"],
+                                match_end=match_info["end"]
+                            )
+                            matches.append(match)
+                            table_matches += 1
+                        
+                        if max_results and len(matches) >= max_results:
+                            break
+                    
+                    if max_results and len(matches) >= max_results:
+                        break
+                
+                if table_matches > 0:
+                    summary["tables_with_matches"] += 1
+                    summary["matches_per_table"][table_idx] = table_matches
+            
+            # Create search result
+            search_result = TableSearchResult(
+                query=query,
+                search_mode=search_mode,
+                case_sensitive=case_sensitive,
+                matches=matches,
+                total_matches=len(matches),
+                tables_searched=tables_to_search,
+                summary=summary
+            )
+            
+            message = f"Found {len(matches)} matches in {summary['tables_with_matches']} tables"
+            if max_results and len(matches) >= max_results:
+                message += f" (limited to {max_results} results)"
+            
+            return OperationResponse.success(message, search_result.to_dict())
+            
+        except (InvalidTableIndexError,) as e:
+            return OperationResponse.error(str(e))
+        except Exception as e:
+            return OperationResponse.error(f"Failed to search table content: {str(e)}")
+    
+    def _search_cell_content(
+        self,
+        cell_text: str,
+        query: str,
+        search_mode: str,
+        case_sensitive: bool,
+        pattern: Optional[re.Pattern] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Search for matches within a single cell's content.
+        
+        Args:
+            cell_text: The cell's text content
+            query: Search query
+            search_mode: Search mode
+            case_sensitive: Case sensitivity flag
+            pattern: Compiled regex pattern (for regex mode)
+            
+        Returns:
+            List of match information dictionaries
+        """
+        matches = []
+        
+        if not cell_text:
+            return matches
+        
+        if search_mode == "exact":
+            # Exact match
+            search_text = cell_text if case_sensitive else cell_text.lower()
+            query_text = query if case_sensitive else query.lower()
+            
+            if search_text == query_text:
+                matches.append({
+                    "text": cell_text,
+                    "start": 0,
+                    "end": len(cell_text)
+                })
+        
+        elif search_mode == "contains":
+            # Contains match
+            search_text = cell_text if case_sensitive else cell_text.lower()
+            query_text = query if case_sensitive else query.lower()
+            
+            start = 0
+            while True:
+                pos = search_text.find(query_text, start)
+                if pos == -1:
+                    break
+                
+                matches.append({
+                    "text": cell_text[pos:pos + len(query)],
+                    "start": pos,
+                    "end": pos + len(query)
+                })
+                start = pos + 1
+        
+        elif search_mode == "regex":
+            # Regex match
+            if pattern:
+                for match in pattern.finditer(cell_text):
+                    matches.append({
+                        "text": match.group(),
+                        "start": match.start(),
+                        "end": match.end()
+                    })
+        
+        return matches
+    
+    def search_table_headers(
+        self,
+        file_path: str,
+        query: str,
+        search_mode: str = "contains",
+        case_sensitive: bool = False
+    ) -> OperationResponse:
+        """
+        Search specifically in table headers (first row of each table).
+        
+        Args:
+            file_path: Path to the document
+            query: Search query string
+            search_mode: Search mode ("exact", "contains", "regex")
+            case_sensitive: Whether search is case sensitive
+            
+        Returns:
+            OperationResponse with search results
+        """
+        try:
+            if not query.strip():
+                return OperationResponse.error("Search query cannot be empty")
+            
+            document = self.document_manager.get_document(file_path)
+            if not document:
+                return OperationResponse.error(f"Document not loaded: {file_path}")
+            
+            matches = []
+            tables_with_headers = 0
+            
+            # Search only first row of each table
+            for table_idx, table in enumerate(document.tables):
+                if not table.rows:
+                    continue
+                
+                first_row = table.rows[0]
+                has_header_matches = False
+                
+                for col_idx, cell in enumerate(first_row.cells):
+                    cell_text = cell.text
+                    
+                    # Use the same search logic as general search
+                    pattern = None
+                    if search_mode == "regex":
+                        try:
+                            flags = 0 if case_sensitive else re.IGNORECASE
+                            pattern = re.compile(query, flags)
+                        except re.error as e:
+                            return OperationResponse.error(f"Invalid regex pattern: {str(e)}")
+                    
+                    cell_matches = self._search_cell_content(
+                        cell_text, query, search_mode, case_sensitive, pattern
+                    )
+                    
+                    for match_info in cell_matches:
+                        match = TableSearchMatch(
+                            table_index=table_idx,
+                            row_index=0,  # Always first row for headers
+                            column_index=col_idx,
+                            cell_value=cell_text,
+                            match_text=match_info["text"],
+                            match_start=match_info["start"],
+                            match_end=match_info["end"]
+                        )
+                        matches.append(match)
+                        has_header_matches = True
+                
+                if has_header_matches:
+                    tables_with_headers += 1
+            
+            # Create search result
+            search_result = TableSearchResult(
+                query=query,
+                search_mode=search_mode,
+                case_sensitive=case_sensitive,
+                matches=matches,
+                total_matches=len(matches),
+                tables_searched=list(range(len(document.tables))),
+                summary={
+                    "search_type": "headers_only",
+                    "tables_with_header_matches": tables_with_headers,
+                    "total_tables": len(document.tables)
+                }
+            )
+            
+            message = f"Found {len(matches)} header matches in {tables_with_headers} tables"
+            return OperationResponse.success(message, search_result.to_dict())
+            
+        except Exception as e:
+            return OperationResponse.error(f"Failed to search table headers: {str(e)}")
