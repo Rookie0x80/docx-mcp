@@ -6,6 +6,7 @@ from fastmcp import FastMCP
 from .core.document_manager import DocumentManager
 from .operations.tables.table_operations import TableOperations
 from .models.responses import OperationResponse
+from .models.formatting import TextFormat, CellAlignment, CellBorders, CellFormatting
 
 
 # Initialize FastMCP app
@@ -283,6 +284,182 @@ def list_tables(
     result = table_operations.list_tables(
         file_path,
         include_summary
+    )
+    return result.to_dict()
+
+
+# Cell formatting operations
+@mcp.tool()
+def format_cell_text(
+    file_path: str,
+    table_index: int,
+    row_index: int,
+    column_index: int,
+    font_family: Optional[str] = None,
+    font_size: Optional[int] = None,
+    font_color: Optional[str] = None,
+    bold: Optional[bool] = None,
+    italic: Optional[bool] = None,
+    underline: Optional[bool] = None,
+    strikethrough: Optional[bool] = None
+) -> Dict[str, Any]:
+    """Format text in a specific cell.
+    
+    Args:
+        file_path: Path to the document file
+        table_index: Index of the table (>= 0)
+        row_index: Row index (>= 0)
+        column_index: Column index (>= 0)
+        font_family: Font family name (e.g., "Arial", "Times New Roman")
+        font_size: Font size in points (8-72)
+        font_color: Font color as hex string (e.g., "FF0000" for red)
+        bold: Make text bold
+        italic: Make text italic
+        underline: Make text underlined
+        strikethrough: Make text strikethrough
+    """
+    text_format = TextFormat(
+        font_family=font_family,
+        font_size=font_size,
+        font_color=font_color,
+        bold=bold,
+        italic=italic,
+        underline=underline,
+        strikethrough=strikethrough
+    )
+    
+    result = table_operations.formatting.format_cell_text(
+        file_path, table_index, row_index, column_index, text_format
+    )
+    return result.to_dict()
+
+
+@mcp.tool()
+def format_cell_alignment(
+    file_path: str,
+    table_index: int,
+    row_index: int,
+    column_index: int,
+    horizontal: Optional[str] = None,
+    vertical: Optional[str] = None
+) -> Dict[str, Any]:
+    """Set text alignment for a specific cell.
+    
+    Args:
+        file_path: Path to the document file
+        table_index: Index of the table (>= 0)
+        row_index: Row index (>= 0)
+        column_index: Column index (>= 0)
+        horizontal: Horizontal alignment ("left", "center", "right", "justify")
+        vertical: Vertical alignment ("top", "middle", "bottom")
+    """
+    alignment_dict = {}
+    if horizontal:
+        alignment_dict["horizontal"] = horizontal
+    if vertical:
+        alignment_dict["vertical"] = vertical
+    
+    result = table_operations.formatting.format_cell_alignment(
+        file_path, table_index, row_index, column_index, alignment_dict
+    )
+    return result.to_dict()
+
+
+@mcp.tool()
+def format_cell_background(
+    file_path: str,
+    table_index: int,
+    row_index: int,
+    column_index: int,
+    color: str
+) -> Dict[str, Any]:
+    """Set background color for a specific cell.
+    
+    Args:
+        file_path: Path to the document file
+        table_index: Index of the table (>= 0)
+        row_index: Row index (>= 0)
+        column_index: Column index (>= 0)
+        color: Background color as hex string (e.g., "FFFF00" for yellow)
+    """
+    result = table_operations.formatting.format_cell_background(
+        file_path, table_index, row_index, column_index, color
+    )
+    return result.to_dict()
+
+
+@mcp.tool()
+def format_cell_borders(
+    file_path: str,
+    table_index: int,
+    row_index: int,
+    column_index: int,
+    top_style: Optional[str] = None,
+    top_width: Optional[str] = None,
+    top_color: Optional[str] = None,
+    bottom_style: Optional[str] = None,
+    bottom_width: Optional[str] = None,
+    bottom_color: Optional[str] = None,
+    left_style: Optional[str] = None,
+    left_width: Optional[str] = None,
+    left_color: Optional[str] = None,
+    right_style: Optional[str] = None,
+    right_width: Optional[str] = None,
+    right_color: Optional[str] = None
+) -> Dict[str, Any]:
+    """Set borders for a specific cell.
+    
+    Args:
+        file_path: Path to the document file
+        table_index: Index of the table (>= 0)
+        row_index: Row index (>= 0)
+        column_index: Column index (>= 0)
+        top_style: Top border style ("solid", "dashed", "dotted", "double", "none")
+        top_width: Top border width ("thin", "medium", "thick")
+        top_color: Top border color as hex string
+        bottom_style: Bottom border style
+        bottom_width: Bottom border width
+        bottom_color: Bottom border color as hex string
+        left_style: Left border style
+        left_width: Left border width
+        left_color: Left border color as hex string
+        right_style: Right border style
+        right_width: Right border width
+        right_color: Right border color as hex string
+    """
+    borders_dict = {}
+    
+    # Build border configuration
+    if any([top_style, top_width, top_color]):
+        borders_dict["top"] = {
+            "style": top_style or "solid",
+            "width": top_width or "thin",
+            "color": top_color or "000000"
+        }
+    
+    if any([bottom_style, bottom_width, bottom_color]):
+        borders_dict["bottom"] = {
+            "style": bottom_style or "solid",
+            "width": bottom_width or "thin",
+            "color": bottom_color or "000000"
+        }
+    
+    if any([left_style, left_width, left_color]):
+        borders_dict["left"] = {
+            "style": left_style or "solid",
+            "width": left_width or "thin",
+            "color": left_color or "000000"
+        }
+    
+    if any([right_style, right_width, right_color]):
+        borders_dict["right"] = {
+            "style": right_style or "solid",
+            "width": right_width or "thin",
+            "color": right_color or "000000"
+        }
+    
+    result = table_operations.formatting.format_cell_borders(
+        file_path, table_index, row_index, column_index, borders_dict
     )
     return result.to_dict()
 

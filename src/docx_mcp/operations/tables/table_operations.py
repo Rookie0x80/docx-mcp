@@ -22,6 +22,7 @@ from ...utils.validation import (
     sanitize_string,
 )
 from ...core.document_manager import DocumentManager
+from .formatting import TableFormattingOperations
 
 
 class TableOperations:
@@ -35,6 +36,7 @@ class TableOperations:
             document_manager: Document manager instance
         """
         self.document_manager = document_manager
+        self.formatting = TableFormattingOperations(document_manager)
     
     def create_table(
         self,

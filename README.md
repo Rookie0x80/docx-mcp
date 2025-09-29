@@ -4,7 +4,7 @@ A comprehensive Model Context Protocol (MCP) server for Microsoft Word document 
 
 ## 🚀 Features
 
-### Phase 1 - Core Table Operations ✅ (Current)
+### Phase 1 - Core Table Operations ✅
 
 **Document Management**
 - Open/create Word documents
@@ -21,6 +21,22 @@ A comprehensive Model Context Protocol (MCP) server for Microsoft Word document 
 - Set/get individual cell values
 - Bulk table data retrieval (array, object, CSV formats)
 - List all tables in document with metadata
+
+### Phase 2.1 - Cell Formatting ✅ (New!)
+
+**Text Formatting**
+- Font family, size, and color customization
+- Bold, italic, underline, strikethrough styling
+- Subscript and superscript support
+
+**Cell Alignment**
+- Horizontal alignment (left, center, right, justify)
+- Vertical alignment (top, middle, bottom)
+
+**Visual Styling**
+- Cell background colors (hex color support)
+- Cell borders with customizable styles, widths, and colors
+- Complete formatting (apply all options at once)
 
 ### Phase 2 - Advanced Table Features 🔄 (In Progress)
 
@@ -195,6 +211,12 @@ All tools accept JSON parameters and return JSON responses, making them compatib
 ### Query Operations
 - `list_tables(file_path, include_summary=True)` - List all tables in document
 
+### Cell Formatting Operations (New in Phase 2.1!)
+- `format_cell_text(file_path, table_index, row_index, column_index, ...)` - Format text in cell
+- `format_cell_alignment(file_path, table_index, row_index, column_index, horizontal, vertical)` - Set cell alignment
+- `format_cell_background(file_path, table_index, row_index, column_index, color)` - Set cell background color
+- `format_cell_borders(file_path, table_index, row_index, column_index, ...)` - Set cell borders
+
 ### Example Language Model Usage
 
 Language models can call these tools with JSON parameters:
@@ -224,9 +246,40 @@ Language models can call these tools with JSON parameters:
 }
 ```
 
+**New! Cell Formatting Examples:**
+```json
+{
+  "tool": "format_cell_text",
+  "parameters": {
+    "file_path": "report.docx",
+    "table_index": 0,
+    "row_index": 0,
+    "column_index": 0,
+    "font_family": "Arial",
+    "font_size": 14,
+    "font_color": "FF0000",
+    "bold": true,
+    "italic": true
+  }
+}
+```
+
+```json
+{
+  "tool": "format_cell_background",
+  "parameters": {
+    "file_path": "report.docx",
+    "table_index": 0,
+    "row_index": 0,
+    "column_index": 0,
+    "color": "FFFF00"
+  }
+}
+```
+
 ## 🧪 Testing
 
-The project uses pytest for comprehensive testing with 36 test cases covering all functionality.
+The project uses pytest for comprehensive testing with 58 test cases covering all functionality.
 
 Run all tests:
 ```bash
@@ -252,26 +305,30 @@ pytest -v
 
 ## 📋 Development Roadmap
 
-### Phase 2: Advanced Table Features (Next Release)
+### Phase 2: Advanced Table Features (In Progress)
 **Priority: High** - Completing table functionality before expanding scope
 
-- [ ] **Table Formatting & Styling**
-  - Cell text formatting (bold, italic, underline, font family/size)
-  - Cell background colors and borders
-  - Text alignment (left, center, right, justify)
-  - Row height and column width controls
+- [x] **Cell Formatting & Styling** ✅ **COMPLETED**
+  - [x] Cell text formatting (bold, italic, underline, font family/size, color)
+  - [x] Cell background colors with hex color support
+  - [x] Cell borders with customizable styles, widths, and colors
+  - [x] Text alignment (horizontal: left, center, right, justify)
+  - [x] Vertical alignment (top, middle, bottom)
+  - [x] Complete formatting (apply all options at once)
+  - [ ] Row height and column width controls
 
 - [ ] **Data Import/Export**
-  - CSV file import to tables
-  - Excel file data import (.xlsx)
-  - JSON data structure mapping
-  - Bulk cell data operations
+  - [ ] CSV file import to tables
+  - [ ] Excel file data import (.xlsx)
+  - [ ] JSON data structure mapping
+  - [ ] Enhanced export with formatting preservation
+  - [ ] Bulk cell data operations
 
 - [ ] **Table Search & Query**
-  - Search content across all table cells
-  - Filter table rows by column criteria
-  - Sort table data by column values
-  - Find and replace in table content
+  - [ ] Search content across all table cells
+  - [ ] Filter table rows by column criteria
+  - [ ] Sort table data by column values
+  - [ ] Find and replace in table content
 
 ### Phase 3: Extended Table Features
 **Priority: Medium** - Advanced table manipulation
@@ -413,6 +470,27 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - **python-docx ≥ 1.1.0** - Word document manipulation
 - **fastmcp ≥ 0.4.0** - MCP server framework
 - **pytest** - Testing framework (development)
+
+## 📊 Project Status
+
+### ✅ Current Capabilities (Phase 1 + 2.1)
+- **🧪 Test Coverage**: 58/58 tests passing (100%)
+- **🛠️ MCP Tools**: 15 available tools (11 core + 4 formatting)
+- **📦 Modules**: 7 core modules with clean architecture
+- **🎨 Formatting**: Complete cell formatting support
+- **📚 Documentation**: Comprehensive API docs and examples
+
+### 🚀 Recent Additions (Phase 2.1)
+- ✅ **Cell Text Formatting**: Font, size, color, bold, italic, underline
+- ✅ **Cell Alignment**: Horizontal and vertical positioning
+- ✅ **Background Colors**: Hex color support for cell backgrounds
+- ✅ **Cell Borders**: Customizable styles, widths, and colors
+- ✅ **Complete Formatting**: Apply all formatting options at once
+
+### 🎯 Next Milestones
+- **Phase 2.2**: Data import/export (CSV, Excel, JSON)
+- **Phase 2.3**: Table search and query capabilities
+- **Phase 3**: Advanced table features and templates
 
 ---
 

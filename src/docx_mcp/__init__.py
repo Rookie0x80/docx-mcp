@@ -13,14 +13,14 @@ __version__ = "2.0.0"
 __author__ = "DOCX-MCP Team"
 __email__ = "contact@docx-mcp.org"
 __description__ = "Advanced Word document operations via Model Context Protocol"
-__url__ = "https://github.com/your-org/docx-mcp"
+__url__ = "https://github.com/Rookie0x80/docx-mcp"
 
 # Feature flags for development phases
 FEATURES = {
     "core_tables": True,          # Phase 1 - Complete
-    "table_formatting": False,    # Phase 2 - In development
-    "data_import_export": False,  # Phase 2 - Planned
-    "table_search": False,        # Phase 2 - Planned
+    "table_formatting": True,     # Phase 2.1 - Complete ✅
+    "data_import_export": False,  # Phase 2.2 - In development
+    "table_search": False,        # Phase 2.3 - Planned
     "document_content": False,    # Phase 4 - Future
     "media_integration": False,   # Phase 5 - Future
     "enterprise_features": False  # Phase 6 - Future

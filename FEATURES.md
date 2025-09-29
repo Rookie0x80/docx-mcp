@@ -29,6 +29,15 @@
 | List Tables | ✅ | Enumerate all tables with metadata | `list_tables()` |
 | Multiple Formats | ✅ | Array, Object, CSV export formats | `format` parameter |
 
+### Cell Formatting Operations (Phase 2.1) ✅
+| Feature | Status | Description | API |
+|---------|--------|-------------|-----|
+| Text Formatting | ✅ | Font, size, color, bold, italic, underline | `format_cell_text()` |
+| Cell Alignment | ✅ | Horizontal and vertical text alignment | `format_cell_alignment()` |
+| Background Colors | ✅ | Cell background color with hex values | `format_cell_background()` |
+| Cell Borders | ✅ | Border styles, widths, colors for all sides | `format_cell_borders()` |
+| Complete Formatting | ✅ | Apply all formatting options at once | `format_cell_complete()` |
+
 ### Error Handling & Validation
 | Feature | Status | Description |
 |---------|--------|-------------|
@@ -42,10 +51,11 @@
 ### Table Formatting & Styling
 | Feature | Status | Priority | Target | Description |
 |---------|--------|----------|--------|-------------|
-| Cell Text Formatting | 🔄 | Critical | 2.1 | Bold, italic, font family/size, color |
-| Cell Alignment | 🔄 | Critical | 2.1 | Horizontal and vertical text alignment |
-| Cell Borders | 🔄 | High | 2.1 | Border styles, width, colors |
-| Cell Background | 🔄 | High | 2.1 | Background colors and patterns |
+| Cell Text Formatting | ✅ | Critical | 2.1 | Bold, italic, font family/size, color |
+| Cell Alignment | ✅ | Critical | 2.1 | Horizontal and vertical text alignment |
+| Cell Borders | ✅ | High | 2.1 | Border styles, width, colors |
+| Cell Background | ✅ | High | 2.1 | Background colors and patterns |
+| Complete Cell Formatting | ✅ | High | 2.1 | Apply all formatting options at once |
 | Row Height Control | 📋 | High | 2.2 | Auto, fixed, minimum row heights |
 | Column Width Control | 📋 | High | 2.2 | Auto, fixed, percentage widths |
 | Table Positioning | 📋 | Medium | 2.2 | Table alignment and text wrapping |
