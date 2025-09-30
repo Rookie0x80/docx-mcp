@@ -119,6 +119,50 @@ class DocumentManager:
         """
         return self._documents.get(file_path)
     
+    def get_or_load_document(self, file_path: str, create_if_not_exists: bool = False) -> Document:
+        """
+        Get a document, loading it automatically if not already loaded.
+        
+        Args:
+            file_path: Path to the document file
+            create_if_not_exists: Whether to create the document if it doesn't exist
+            
+        Returns:
+            Document object
+            
+        Raises:
+            DocumentNotFoundError: If document doesn't exist and create_if_not_exists is False
+            DocumentAccessError: If there's an error accessing the document
+        """
+        # Check if document is already loaded
+        if file_path in self._documents:
+            return self._documents[file_path]
+        
+        # Load the document
+        try:
+            path = Path(file_path)
+            
+            if path.exists():
+                # Validate and open existing file
+                validate_file_path(file_path, must_exist=True)
+                document = Document(str(path))
+            else:
+                if create_if_not_exists:
+                    # Create new document
+                    document = Document()
+                else:
+                    raise DocumentNotFoundError(f"Document not found: {file_path}")
+            
+            # Cache the document
+            self._documents[file_path] = document
+            
+            return document
+            
+        except DocumentNotFoundError:
+            raise
+        except Exception as e:
+            raise DocumentAccessError(f"Failed to load document {file_path}: {str(e)}")
+    
     def close_document(self, file_path: str) -> OperationResponse:
         """
         Close a document and remove from cache.

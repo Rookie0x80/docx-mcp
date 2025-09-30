@@ -48,9 +48,7 @@ class TableFormattingOperations:
             OperationResponse indicating success or failure
         """
         try:
-            document = self.document_manager.get_document(file_path)
-            if not document:
-                return OperationResponse.error(f"Document not loaded: {file_path}")
+            document = self.document_manager.get_or_load_document(file_path)
             
             # Validate parameters
             validate_table_index(table_index, len(document.tables))
@@ -109,9 +107,7 @@ class TableFormattingOperations:
             OperationResponse indicating success or failure
         """
         try:
-            document = self.document_manager.get_document(file_path)
-            if not document:
-                return OperationResponse.error(f"Document not loaded: {file_path}")
+            document = self.document_manager.get_or_load_document(file_path)
             
             # Validate parameters
             validate_table_index(table_index, len(document.tables))
@@ -170,9 +166,7 @@ class TableFormattingOperations:
             OperationResponse indicating success or failure
         """
         try:
-            document = self.document_manager.get_document(file_path)
-            if not document:
-                return OperationResponse.error(f"Document not loaded: {file_path}")
+            document = self.document_manager.get_or_load_document(file_path)
             
             # Validate parameters
             validate_table_index(table_index, len(document.tables))
@@ -225,9 +219,7 @@ class TableFormattingOperations:
             OperationResponse indicating success or failure
         """
         try:
-            document = self.document_manager.get_document(file_path)
-            if not document:
-                return OperationResponse.error(f"Document not loaded: {file_path}")
+            document = self.document_manager.get_or_load_document(file_path)
             
             # Validate parameters
             validate_table_index(table_index, len(document.tables))

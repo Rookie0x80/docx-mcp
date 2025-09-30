@@ -1,14 +1,17 @@
 # DOCX-MCP Feature Matrix
 
-## 🎯 Current Capabilities (Phase 1) ✅
+## 🎯 Current Capabilities (Phase 1 + Tool Independence) ✅
 
 ### Document Management
 | Feature | Status | Description | API |
 |---------|--------|-------------|-----|
-| Open Document | ✅ | Open existing or create new .docx files | `open_document()` |
-| Save Document | ✅ | Save document with optional rename | `save_document()` |
-| Document Info | ✅ | Get metadata (tables, paragraphs, etc.) | `get_document_info()` |
+| Open Document | ✅ | Open existing or create new .docx files (optional - auto-loads) | `open_document()` |
+| Save Document | ✅ | Save document with optional rename (auto-loads if needed) | `save_document()` |
+| Document Info | ✅ | Get metadata (tables, paragraphs, etc.) (auto-loads if needed) | `get_document_info()` |
 | Document Validation | ✅ | File path and format validation | Built-in |
+| **Independent Tools** | ✅ | **Each tool works independently without pre-loading** | **All APIs** |
+| **Auto-loading** | ✅ | **Documents loaded automatically when needed** | **Built-in** |
+| **Document Caching** | ✅ | **Loaded documents cached for performance** | **Built-in** |
 
 ### Table Structure Operations
 | Feature | Status | Description | API |
@@ -55,6 +58,15 @@
 | Input Validation | ✅ | Parameter validation with clear error messages |
 | Graceful Degradation | ✅ | Partial success handling |
 | Comprehensive Logging | ✅ | Detailed operation logging |
+| **Automatic Error Recovery** | ✅ | **Auto-load documents on missing document errors** |
+
+### MCP Integration & AI-Friendly Design
+| Feature | Status | Description | API |
+|---------|--------|-------------|-----|
+| **Independent Tool Calls** | ✅ | **Each tool can be called without dependencies** | **All APIs** |
+| **Document Auto-Discovery** | ✅ | **Tools automatically find and load documents** | **Built-in** |
+| **Performance Caching** | ✅ | **Smart caching prevents redundant document loading** | **Built-in** |
+| **LLM-Optimized Design** | ✅ | **Perfect for AI model integration without workflow complexity** | **All APIs** |
 
 ## 🚧 Phase 2 - Advanced Table Features (In Development)
 
@@ -173,6 +185,7 @@
 ## 📅 Target Milestones
 
 - **2.1**: Cell formatting and basic styling ✅ **COMPLETED**
+- **2.1.1**: Independent tool design and auto-loading ✅ **COMPLETED**
 - **2.2**: Layout control and positioning
 - **2.3**: Advanced styling and themes
 - **2.4**: Import operations

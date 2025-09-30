@@ -4,7 +4,9 @@ import re
 from typing import List, Optional, Dict, Any, Union
 from docx import Document
 from docx.table import Table, _Cell
-from docx.shared import Inches
+from docx.shared import Inches, Pt, RGBColor
+from docx.oxml.shared import qn, OxmlElement
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from ...models.responses import OperationResponse
 from ...models.tables import TableInfo, CellPosition, SearchResult, TableData, TableSearchMatch, TableSearchResult
@@ -82,9 +84,7 @@ class TableOperations:
                 return OperationResponse.error(f"Headers length ({len(headers)}) must match columns ({cols})")
             
             # Get document
-            document = self.document_manager.get_document(file_path)
-            if not document:
-                return OperationResponse.error(f"Document not loaded: {file_path}")
+            document = self.document_manager.get_or_load_document(file_path)
             
             # Create table
             table = None
@@ -140,9 +140,7 @@ class TableOperations:
             OperationResponse with operation result
         """
         try:
-            document = self.document_manager.get_document(file_path)
-            if not document:
-                return OperationResponse.error(f"Document not loaded: {file_path}")
+            document = self.document_manager.get_or_load_document(file_path)
             
             validate_table_index(table_index, len(document.tables))
             
@@ -164,16 +162,24 @@ class TableOperations:
         count: int = 1,
         position: str = "end",
         row_index: Optional[int] = None,
+        copy_style_from_row: Optional[int] = None,
+        default_text_format: Optional[TextFormat] = None,
+        default_alignment: Optional[CellAlignment] = None,
+        default_background_color: Optional[str] = None,
     ) -> OperationResponse:
         """
-        Add rows to a table.
+        Add rows to a table with optional styling control.
         
         Args:
             file_path: Path to the document
             table_index: Index of the table
             count: Number of rows to add
-            position: Where to add rows
+            position: Where to add rows ("end", "beginning", "at_index")
             row_index: Specific row index for 'at_index' position
+            copy_style_from_row: Row index to copy style from (None = no style copying)
+            default_text_format: Default text formatting for new cells
+            default_alignment: Default alignment for new cells
+            default_background_color: Default background color for new cells
             
         Returns:
             OperationResponse with operation result
@@ -185,9 +191,7 @@ class TableOperations:
             valid_positions = ["end", "beginning", "at_index"]
             validate_position_parameter(position, valid_positions)
             
-            document = self.document_manager.get_document(file_path)
-            if not document:
-                return OperationResponse.error(f"Document not loaded: {file_path}")
+            document = self.document_manager.get_or_load_document(file_path)
             
             validate_table_index(table_index, len(document.tables))
             table = document.tables[table_index]
@@ -198,22 +202,61 @@ class TableOperations:
             if position == "at_index":
                 validate_cell_position(row_index, 0, len(table.rows), len(table.columns))
             
+            # Determine reference row for style copying
+            reference_row = None
+            if copy_style_from_row is not None:
+                # Explicit row specified
+                if copy_style_from_row < 0 or copy_style_from_row >= len(table.rows):
+                    return OperationResponse.error(f"Invalid copy_style_from_row: {copy_style_from_row}")
+                reference_row = table.rows[copy_style_from_row]
+            else:
+                # Default behavior: copy from the last row (if table has rows)
+                if len(table.rows) > 0:
+                    if position == "end":
+                        # For end insertion, copy from last row
+                        reference_row = table.rows[-1]
+                    elif position == "beginning":
+                        # For beginning insertion, copy from first row
+                        reference_row = table.rows[0]
+                    elif position == "at_index" and row_index is not None:
+                        # For index insertion, copy from the row at that index (or previous if available)
+                        if row_index > 0:
+                            reference_row = table.rows[row_index - 1]
+                        elif row_index < len(table.rows):
+                            reference_row = table.rows[row_index]
+            
+            # Keep track of newly added rows for styling
+            new_rows = []
+            original_row_count = len(table.rows)
+            
             # Add rows
-            for _ in range(count):
+            for i in range(count):
                 if position == "end":
-                    table.add_row()
+                    new_row = table.add_row()
+                    new_rows.append(new_row)
                 elif position == "beginning":
                     # Insert at beginning - not directly supported, need to work around
                     new_row = table.add_row()
                     # Move new row to beginning
-                    table._element.insert(0, new_row._element)
+                    table._element.insert(i, new_row._element)
+                    new_rows.append(new_row)
                 elif position == "at_index":
                     # Insert at specific index
                     new_row = table.add_row()
                     # Move to desired position
-                    if row_index < len(table.rows) - 1:
-                        target_row = table.rows[row_index]
+                    if row_index + i < len(table.rows) - 1:
+                        target_row = table.rows[row_index + i]
                         target_row._element.addprevious(new_row._element)
+                    new_rows.append(new_row)
+            
+            # Apply styling to new rows
+            self._apply_row_styling(
+                new_rows, 
+                reference_row, 
+                default_text_format, 
+                default_alignment, 
+                default_background_color
+            )
             
             data = {
                 "table_index": table_index,
@@ -257,9 +300,7 @@ class TableOperations:
             valid_positions = ["end", "beginning", "at_index"]
             validate_position_parameter(position, valid_positions)
             
-            document = self.document_manager.get_document(file_path)
-            if not document:
-                return OperationResponse.error(f"Document not loaded: {file_path}")
+            document = self.document_manager.get_or_load_document(file_path)
             
             validate_table_index(table_index, len(document.tables))
             table = document.tables[table_index]
@@ -320,9 +361,7 @@ class TableOperations:
             if not row_indices:
                 return OperationResponse.error("No row indices provided")
             
-            document = self.document_manager.get_document(file_path)
-            if not document:
-                return OperationResponse.error(f"Document not loaded: {file_path}")
+            document = self.document_manager.get_or_load_document(file_path)
             
             validate_table_index(table_index, len(document.tables))
             table = document.tables[table_index]
@@ -387,9 +426,7 @@ class TableOperations:
             from docx.shared import RGBColor
             from docx.enum.text import WD_ALIGN_PARAGRAPH
             
-            document = self.document_manager.get_document(file_path)
-            if not document:
-                return OperationResponse.error(f"Document not loaded: {file_path}")
+            document = self.document_manager.get_or_load_document(file_path)
             
             validate_table_index(table_index, len(document.tables))
             table = document.tables[table_index]
@@ -640,9 +677,7 @@ class TableOperations:
             OperationResponse with cell value and formatting
         """
         try:
-            document = self.document_manager.get_document(file_path)
-            if not document:
-                return OperationResponse.error(f"Document not loaded: {file_path}")
+            document = self.document_manager.get_or_load_document(file_path)
             
             validate_table_index(table_index, len(document.tables))
             table = document.tables[table_index]
@@ -681,12 +716,7 @@ class TableOperations:
                         "vertical": cell_format.get('vertical_alignment')
                     },
                     "background_color": cell_format.get('background_color'),
-                    "borders": {
-                        "top": cell_format.get('borders', {}).get('top'),
-                        "bottom": cell_format.get('borders', {}).get('bottom'),
-                        "left": cell_format.get('borders', {}).get('left'),
-                        "right": cell_format.get('borders', {}).get('right')
-                    }
+                    "borders": self._extract_border_data(cell_format.get('borders', {}))
                 }
                 
                 # Include merge information if cell is merged
@@ -738,9 +768,7 @@ class TableOperations:
             if format_type not in valid_formats:
                 return OperationResponse.error(f"Invalid format. Valid options: {', '.join(valid_formats)}")
             
-            document = self.document_manager.get_document(file_path)
-            if not document:
-                return OperationResponse.error(f"Document not loaded: {file_path}")
+            document = self.document_manager.get_or_load_document(file_path)
             
             validate_table_index(table_index, len(document.tables))
             table = document.tables[table_index]
@@ -814,9 +842,7 @@ class TableOperations:
             OperationResponse with list of tables
         """
         try:
-            document = self.document_manager.get_document(file_path)
-            if not document:
-                return OperationResponse.error(f"Document not loaded: {file_path}")
+            document = self.document_manager.get_or_load_document(file_path)
             
             tables = []
             for i, table in enumerate(document.tables):
@@ -882,9 +908,7 @@ class TableOperations:
             if search_mode not in valid_modes:
                 return OperationResponse.error(f"Invalid search mode. Valid options: {', '.join(valid_modes)}")
             
-            document = self.document_manager.get_document(file_path)
-            if not document:
-                return OperationResponse.error(f"Document not loaded: {file_path}")
+            document = self.document_manager.get_or_load_document(file_path)
             
             # Determine which tables to search
             if table_indices is None:
@@ -1066,9 +1090,7 @@ class TableOperations:
             if not query.strip():
                 return OperationResponse.error("Search query cannot be empty")
             
-            document = self.document_manager.get_document(file_path)
-            if not document:
-                return OperationResponse.error(f"Document not loaded: {file_path}")
+            document = self.document_manager.get_or_load_document(file_path)
             
             matches = []
             tables_with_headers = 0
@@ -1152,9 +1174,7 @@ class TableOperations:
             OperationResponse with comprehensive table analysis
         """
         try:
-            document = self.document_manager.get_document(file_path)
-            if not document:
-                return OperationResponse.error(f"Document not loaded: {file_path}")
+            document = self.document_manager.get_or_load_document(file_path)
             
             validate_table_index(table_index, len(document.tables))
             table = document.tables[table_index]
@@ -1339,9 +1359,7 @@ class TableOperations:
         try:
             from datetime import datetime
             
-            document = self.document_manager.get_document(file_path)
-            if not document:
-                return OperationResponse.error(f"Document not loaded: {file_path}")
+            document = self.document_manager.get_or_load_document(file_path)
             
             if not document.tables:
                 return OperationResponse.success(
@@ -1400,3 +1418,248 @@ class TableOperations:
             
         except Exception as e:
             return OperationResponse.error(f"Failed to analyze all tables: {str(e)}")
+    
+    def _apply_row_styling(
+        self, 
+        new_rows, 
+        reference_row, 
+        default_text_format, 
+        default_alignment, 
+        default_background_color
+    ):
+        """
+        Apply styling to newly added rows.
+        
+        Args:
+            new_rows: List of newly created row objects
+            reference_row: Row to copy style from (if provided)
+            default_text_format: Default text formatting
+            default_alignment: Default alignment
+            default_background_color: Default background color
+        """
+        
+        for new_row in new_rows:
+            # Apply styling to each cell in the new row
+            for col_idx, new_cell in enumerate(new_row.cells):
+                # Determine reference cell for style copying
+                reference_cell = None
+                if reference_row and col_idx < len(reference_row.cells):
+                    reference_cell = reference_row.cells[col_idx]
+                
+                # Copy style from reference cell if available
+                if reference_cell:
+                    self._copy_cell_style(new_cell, reference_cell)
+                
+                # Apply default formatting if no reference or to override
+                if default_text_format or default_alignment or default_background_color:
+                    self._apply_default_cell_formatting(
+                        new_cell, 
+                        default_text_format, 
+                        default_alignment, 
+                        default_background_color
+                    )
+    
+    def _copy_cell_style(self, target_cell, source_cell):
+        """
+        Copy all styling from source cell to target cell.
+        
+        Args:
+            target_cell: Cell to apply styling to
+            source_cell: Cell to copy styling from
+        """
+        try:
+            # Copy paragraph formatting
+            for target_para, source_para in zip(target_cell.paragraphs, source_cell.paragraphs):
+                # Copy paragraph alignment
+                target_para.alignment = source_para.alignment
+                
+                # Copy run formatting
+                if source_para.runs:
+                    # Clear existing runs in target
+                    for run in target_para.runs:
+                        run._element.getparent().remove(run._element)
+                    
+                    # Copy runs from source
+                    for source_run in source_para.runs:
+                        new_run = target_para.add_run("")
+                        
+                        # Copy font properties
+                        if source_run.font.name:
+                            new_run.font.name = source_run.font.name
+                        if source_run.font.size:
+                            new_run.font.size = source_run.font.size
+                        if source_run.font.color.rgb:
+                            new_run.font.color.rgb = source_run.font.color.rgb
+                        
+                        new_run.bold = source_run.bold
+                        new_run.italic = source_run.italic
+                        new_run.underline = source_run.underline
+            
+            # Copy cell background color
+            try:
+                source_shading = source_cell._element.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}shd')
+                if source_shading is not None:
+                    target_shading = target_cell._element.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}shd')
+                    if target_shading is None:
+                        # Create shading element
+                        target_shading = OxmlElement('w:shd')
+                        target_cell._element.get_or_add_tcPr().append(target_shading)
+                    
+                    # Copy fill attribute
+                    if source_shading.get(qn('w:fill')):
+                        target_shading.set(qn('w:fill'), source_shading.get(qn('w:fill')))
+            except Exception:
+                pass  # Ignore background color copy errors
+            
+            # Copy cell vertical alignment
+            try:
+                source_valign = source_cell._element.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}vAlign')
+                if source_valign is not None:
+                    target_valign = target_cell._element.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}vAlign')
+                    if target_valign is None:
+                        target_valign = OxmlElement('w:vAlign')
+                        target_cell._element.get_or_add_tcPr().append(target_valign)
+                    target_valign.set(qn('w:val'), source_valign.get(qn('w:val')))
+            except Exception:
+                pass  # Ignore vertical alignment copy errors
+            
+            # Copy cell borders
+            try:
+                ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+                source_borders = source_cell._element.find(f'.//{{{ns}}}tcBorders')
+                if source_borders is not None:
+                    # Get or create target tcPr
+                    target_tcPr = target_cell._element.get_or_add_tcPr()
+                    
+                    # Remove existing borders
+                    existing_borders = target_tcPr.find(f'.//{{{ns}}}tcBorders')
+                    if existing_borders is not None:
+                        target_tcPr.remove(existing_borders)
+                    
+                    # Clone the entire tcBorders element
+                    import copy
+                    new_borders = copy.deepcopy(source_borders)
+                    target_tcPr.append(new_borders)
+            except Exception:
+                pass  # Ignore border copy errors
+                
+        except Exception as e:
+            # If copying fails, just continue - better to have unstyled cells than no cells
+            pass
+    
+    def _apply_default_cell_formatting(
+        self, 
+        cell, 
+        text_format, 
+        alignment, 
+        background_color
+    ):
+        """
+        Apply default formatting to a cell.
+        
+        Args:
+            cell: Cell to format
+            text_format: TextFormat object with formatting
+            alignment: CellAlignment object with alignment
+            background_color: Background color as hex string
+        """
+        try:
+            # Apply text formatting
+            if text_format:
+                for paragraph in cell.paragraphs:
+                    if not paragraph.runs:
+                        paragraph.add_run("")
+                    
+                    for run in paragraph.runs:
+                        if text_format.font_family:
+                            run.font.name = text_format.font_family
+                        if text_format.font_size:
+                            run.font.size = Pt(text_format.font_size)
+                        if text_format.font_color:
+                            # Parse hex color
+                            try:
+                                color_hex = text_format.font_color.lstrip('#')
+                                if len(color_hex) == 6:
+                                    r = int(color_hex[0:2], 16)
+                                    g = int(color_hex[2:4], 16)
+                                    b = int(color_hex[4:6], 16)
+                                    run.font.color.rgb = RGBColor(r, g, b)
+                            except Exception:
+                                pass
+                        
+                        if text_format.bold is not None:
+                            run.bold = text_format.bold
+                        if text_format.italic is not None:
+                            run.italic = text_format.italic
+                        if text_format.underline is not None:
+                            run.underline = text_format.underline
+            
+            # Apply alignment
+            if alignment:
+                for paragraph in cell.paragraphs:
+                    if alignment.horizontal:
+                        alignment_map = {
+                            'left': WD_ALIGN_PARAGRAPH.LEFT,
+                            'center': WD_ALIGN_PARAGRAPH.CENTER,
+                            'right': WD_ALIGN_PARAGRAPH.RIGHT,
+                            'justify': WD_ALIGN_PARAGRAPH.JUSTIFY
+                        }
+                        if alignment.horizontal.lower() in alignment_map:
+                            paragraph.alignment = alignment_map[alignment.horizontal.lower()]
+                
+                # Apply vertical alignment
+                if alignment.vertical:
+                    try:
+                        v_align = alignment.vertical.lower()
+                        if v_align == 'middle':
+                            v_align = 'center'
+                        
+                        valign_element = cell._element.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}vAlign')
+                        if valign_element is None:
+                            valign_element = OxmlElement('w:vAlign')
+                            cell._element.get_or_add_tcPr().append(valign_element)
+                        valign_element.set(qn('w:val'), v_align)
+                    except Exception:
+                        pass
+            
+            # Apply background color
+            if background_color:
+                try:
+                    color_hex = background_color.lstrip('#').upper()
+                    if len(color_hex) == 6:
+                        shading = cell._element.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}shd')
+                        if shading is None:
+                            shading = OxmlElement('w:shd')
+                            cell._element.get_or_add_tcPr().append(shading)
+                        shading.set(qn('w:fill'), color_hex)
+                except Exception:
+                    pass
+                    
+        except Exception as e:
+            # If formatting fails, continue - better to have unformatted cells than no cells
+            pass
+    
+    def _extract_border_data(self, borders_dict: dict) -> dict:
+        """
+        Extract border data from extract_cell_formatting format to expected format.
+        
+        Args:
+            borders_dict: Border data from extract_cell_formatting
+            
+        Returns:
+            Border data in expected format for get_cell_value
+        """
+        result = {}
+        
+        for side in ['top', 'bottom', 'left', 'right']:
+            border_info = borders_dict.get(side, {})
+            if border_info:
+                result[f'{side}_style'] = border_info.get('style')
+                result[f'{side}_width'] = border_info.get('width')
+                result[f'{side}_color'] = border_info.get('color')
+            else:
+                result[f'{side}_style'] = None
+                result[f'{side}_width'] = None
+                result[f'{side}_color'] = None
+        
+        return result

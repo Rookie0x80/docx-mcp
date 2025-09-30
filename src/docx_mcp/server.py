@@ -1,6 +1,6 @@
 """MCP Server for Word document operations using FastMCP."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from fastmcp import FastMCP
 
 from .core.document_manager import DocumentManager
@@ -43,7 +43,7 @@ def open_document(
 @mcp.tool()
 def save_document(
     file_path: str,
-    save_as: Optional[str] = None
+    save_as: str = None
 ) -> Dict[str, Any]:
     """Save a Word document.
     
@@ -76,8 +76,8 @@ def create_table(
     rows: int,
     cols: int,
     position: str = "end",
-    paragraph_index: Optional[int] = None,
-    headers: Optional[List[str]] = None
+    paragraph_index: int = None,
+    headers: List[str] = None
 ) -> Dict[str, Any]:
     """Create a new table in the document.
     
@@ -124,9 +124,19 @@ def add_table_rows(
     table_index: int,
     count: int = 1,
     position: str = "end",
-    row_index: Optional[int] = None
+    row_index: int = None,
+    copy_style_from_row: int = None,
+    font_family: str = None,
+    font_size: int = None,
+    font_color: str = None,
+    bold: bool = None,
+    italic: bool = None,
+    underline: bool = None,
+    horizontal_alignment: str = None,
+    vertical_alignment: str = None,
+    background_color: str = None
 ) -> Dict[str, Any]:
-    """Add rows to a table.
+    """Add rows to a table with optional styling control.
     
     Args:
         file_path: Path to the document file
@@ -134,13 +144,47 @@ def add_table_rows(
         count: Number of rows to add (>= 1)
         position: Position to add rows ("end", "beginning", "at_index")
         row_index: Row index for at_index position
+        copy_style_from_row: Row index to copy style from (None = auto-detect)
+        font_family: Font family for new cells (e.g., "Arial", "Times New Roman")
+        font_size: Font size in points (8-72)
+        font_color: Font color as hex string (e.g., "FF0000" for red)
+        bold: Bold formatting
+        italic: Italic formatting
+        underline: Underline formatting
+        horizontal_alignment: Horizontal alignment ("left", "center", "right", "justify")
+        vertical_alignment: Vertical alignment ("top", "middle", "bottom")
+        background_color: Background color as hex string (e.g., "FFFF00" for yellow)
     """
+    # Create TextFormat if any text formatting parameters are provided
+    text_format = None
+    if any([font_family, font_size, font_color, bold is not None, italic is not None, underline is not None]):
+        text_format = TextFormat(
+            font_family=font_family,
+            font_size=font_size,
+            font_color=font_color,
+            bold=bold,
+            italic=italic,
+            underline=underline
+        )
+    
+    # Create CellAlignment if any alignment parameters are provided
+    alignment = None
+    if horizontal_alignment or vertical_alignment:
+        alignment = CellAlignment(
+            horizontal=horizontal_alignment,
+            vertical=vertical_alignment
+        )
+    
     result = table_operations.add_table_rows(
         file_path,
         table_index,
         count,
         position,
-        row_index
+        row_index,
+        copy_style_from_row,
+        text_format,
+        alignment,
+        background_color
     )
     return result.to_dict()
 
@@ -151,7 +195,7 @@ def add_table_columns(
     table_index: int,
     count: int = 1,
     position: str = "end",
-    column_index: Optional[int] = None
+    column_index: int = None
 ) -> Dict[str, Any]:
     """Add columns to a table.
     
@@ -201,15 +245,15 @@ def set_cell_value(
     row_index: int,
     column_index: int,
     value: str,
-    font_family: Optional[str] = None,
-    font_size: Optional[int] = None,
-    font_color: Optional[str] = None,
-    bold: Optional[bool] = None,
-    italic: Optional[bool] = None,
-    underline: Optional[bool] = None,
-    horizontal_alignment: Optional[str] = None,
-    vertical_alignment: Optional[str] = None,
-    background_color: Optional[str] = None,
+    font_family: str = None,
+    font_size: int = None,
+    font_color: str = None,
+    bold: bool = None,
+    italic: bool = None,
+    underline: bool = None,
+    horizontal_alignment: str = None,
+    vertical_alignment: str = None,
+    background_color: str = None,
     preserve_existing_format: bool = True
 ) -> Dict[str, Any]:
     """Set the value and optional formatting of a specific cell.
@@ -351,8 +395,8 @@ def search_table_content(
     query: str,
     search_mode: str = "contains",
     case_sensitive: bool = False,
-    table_indices: Optional[List[int]] = None,
-    max_results: Optional[int] = None
+    table_indices: List[int] = None,
+    max_results: int = None
 ) -> Dict[str, Any]:
     """Search for content within table cells across all or specified tables.
     
@@ -406,13 +450,13 @@ def format_cell_text(
     table_index: int,
     row_index: int,
     column_index: int,
-    font_family: Optional[str] = None,
-    font_size: Optional[int] = None,
-    font_color: Optional[str] = None,
-    bold: Optional[bool] = None,
-    italic: Optional[bool] = None,
-    underline: Optional[bool] = None,
-    strikethrough: Optional[bool] = None
+    font_family: str = None,
+    font_size: int = None,
+    font_color: str = None,
+    bold: bool = None,
+    italic: bool = None,
+    underline: bool = None,
+    strikethrough: bool = None
 ) -> Dict[str, Any]:
     """Format text in a specific cell.
     
@@ -451,8 +495,8 @@ def format_cell_alignment(
     table_index: int,
     row_index: int,
     column_index: int,
-    horizontal: Optional[str] = None,
-    vertical: Optional[str] = None
+    horizontal: str = None,
+    vertical: str = None
 ) -> Dict[str, Any]:
     """Set text alignment for a specific cell.
     
@@ -505,18 +549,18 @@ def format_cell_borders(
     table_index: int,
     row_index: int,
     column_index: int,
-    top_style: Optional[str] = None,
-    top_width: Optional[str] = None,
-    top_color: Optional[str] = None,
-    bottom_style: Optional[str] = None,
-    bottom_width: Optional[str] = None,
-    bottom_color: Optional[str] = None,
-    left_style: Optional[str] = None,
-    left_width: Optional[str] = None,
-    left_color: Optional[str] = None,
-    right_style: Optional[str] = None,
-    right_width: Optional[str] = None,
-    right_color: Optional[str] = None
+    top_style: str = None,
+    top_width: str = None,
+    top_color: str = None,
+    bottom_style: str = None,
+    bottom_width: str = None,
+    bottom_color: str = None,
+    left_style: str = None,
+    left_width: str = None,
+    left_color: str = None,
+    right_style: str = None,
+    right_width: str = None,
+    right_color: str = None
 ) -> Dict[str, Any]:
     """Set borders for a specific cell.
     

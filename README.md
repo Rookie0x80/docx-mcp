@@ -141,6 +141,8 @@ Run the MCP server with default STDIO transport:
 python -m docx_mcp.server
 ```
 
+> **✅ Independent Tool Design**: Each MCP tool now works independently without requiring document pre-loading. You can directly call any tool with a file path, and the document will be automatically loaded as needed. This makes the tools more suitable for AI model integration.
+
 #### Transport Protocols
 
 The server supports multiple transport protocols:
@@ -182,10 +184,8 @@ from docx_mcp.operations.tables.table_operations import TableOperations
 doc_manager = DocumentManager()
 table_ops = TableOperations(doc_manager)
 
-# Open document
-result = doc_manager.open_document("document.docx", create_if_not_exists=True)
-
-# Create table with headers
+# No need to pre-load documents! Tools work independently.
+# Create table with headers (document auto-loaded if needed)
 result = table_ops.create_table(
     "document.docx", 
     rows=3, 
@@ -193,24 +193,26 @@ result = table_ops.create_table(
     headers=["Name", "Age", "City", "Occupation"]
 )
 
-# Set cell value
+# Set cell value (document auto-loaded if not already cached)
 result = table_ops.set_cell_value("document.docx", 0, 1, 0, "Alice")
 
-# Get table data
+# Get table data (document auto-loaded if needed)
 result = table_ops.get_table_data("document.docx", 0, include_headers=True)
 
-# Save document
+# Save document (document auto-loaded and saved)
 result = doc_manager.save_document("document.docx")
 ```
+
+> **🚀 Automatic Document Loading**: The new design automatically loads documents when needed, eliminating the need to explicitly call `open_document()` before using other operations. Documents are cached for performance, and you can still manually manage document loading if preferred.
 
 ## 🔧 Available MCP Tools
 
 All tools accept JSON parameters and return JSON responses, making them compatible with language models.
 
 ### Document Operations
-- `open_document(file_path, create_if_not_exists=True)` - Open or create a Word document
-- `save_document(file_path, save_as=None)` - Save a Word document
-- `get_document_info(file_path)` - Get document information
+- `open_document(file_path, create_if_not_exists=True)` - Open or create a Word document (optional - tools auto-load)
+- `save_document(file_path, save_as=None)` - Save a Word document (auto-loads if needed)
+- `get_document_info(file_path)` - Get document information (auto-loads if needed)
 
 ### Table Structure Operations
 - `create_table(file_path, rows, cols, position="end", paragraph_index=None, headers=None)` - Create a new table
@@ -243,7 +245,7 @@ All tools accept JSON parameters and return JSON responses, making them compatib
 
 ### Example Language Model Usage
 
-Language models can call these tools with JSON parameters:
+Language models can call these tools with JSON parameters. **No pre-loading required** - each tool call is independent:
 
 ```json
 {
@@ -596,7 +598,9 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - **🔬 Analysis**: Deep table structure and style analysis for LLMs
 - **📚 Documentation**: Comprehensive API docs and examples
 
-### 🚀 Recent Additions (Phase 2.8)
+### 🚀 Recent Additions (Phase 2.8 + Tool Independence)
+- ✅ **Independent Tool Design**: Each MCP tool works independently without requiring document pre-loading
+- ✅ **Automatic Document Loading**: Documents are loaded automatically when needed and cached for performance
 - ✅ **Table Structure Analysis**: Complete analysis of table structure, styles, and merged cells
 - ✅ **Enhanced Cell Operations**: Set/get cell values with optional formatting preservation
 - ✅ **Style Detection**: Automatic extraction of fonts, colors, alignment, borders

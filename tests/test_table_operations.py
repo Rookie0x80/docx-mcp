@@ -1803,3 +1803,215 @@ class TestCellValueIntegration:
             # Verify background color
             if config["background"]:
                 assert retrieved_formatting['background_color'] == config["background"]
+
+
+class TestRowStylePreservation:
+    """Test row style preservation when adding new rows."""
+    
+    @pytest.mark.unit
+    def test_add_row_preserves_style_by_default(self, document_manager, table_operations, test_doc_path):
+        """Test that adding rows preserves style from adjacent rows by default."""
+        from docx_mcp.models.formatting import TextFormat
+        
+        # Setup: Create document and table
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=2, cols=3)
+        
+        # Step 1: Set distinctive formatting on the last row
+        distinctive_format = TextFormat(
+            font_family="Times New Roman",
+            font_size=14,
+            font_color="FF0000",  # Red
+            bold=True,
+            italic=True,
+            underline=True
+        )
+        
+        # Apply formatting to all cells in the last row (row 1)
+        for col in range(3):
+            set_result = table_operations.set_cell_value(
+                str(test_doc_path), 0, 1, col, f"Styled Cell {col}",
+                text_format=distinctive_format,
+                alignment={"horizontal": "center", "vertical": "middle"},
+                background_color="FFFF00",  # Yellow background
+                preserve_existing_format=False
+            )
+            assert set_result.status == ResponseStatus.SUCCESS
+        
+        # Step 2: Add a new row using default behavior (should copy style from last row)
+        add_result = table_operations.add_table_rows(
+            str(test_doc_path), 
+            table_index=0, 
+            count=1, 
+            position="end"
+            # No explicit styling parameters - should use default behavior
+        )
+        
+        assert add_result.status == ResponseStatus.SUCCESS
+        assert add_result.data['rows_added'] == 1
+        assert add_result.data['new_row_count'] == 3  # Original 2 + added 1
+        
+        # Step 3: Analyze table structure to verify style preservation
+        analysis_result = table_operations.analyze_table_structure(str(test_doc_path), 0)
+        assert analysis_result.status == ResponseStatus.SUCCESS
+        
+        # Extract cell analysis for the newly added row (row 2)
+        table_data = analysis_result.data
+        
+        # Step 4: Verify that each cell in the new row has the same formatting as the reference row
+        for col in range(3):
+            # Get cell value with formatting for the new row
+            get_result = table_operations.get_cell_value(
+                str(test_doc_path), 0, 2, col, include_formatting=True
+            )
+            
+            assert get_result.status == ResponseStatus.SUCCESS
+            new_cell_formatting = get_result.data['formatting']
+            
+            # Get reference cell formatting from the previous row (row 1)
+            ref_result = table_operations.get_cell_value(
+                str(test_doc_path), 0, 1, col, include_formatting=True
+            )
+            
+            assert ref_result.status == ResponseStatus.SUCCESS
+            ref_cell_formatting = ref_result.data['formatting']
+            
+            # Verify text formatting consistency
+            new_text_format = new_cell_formatting['text_format']
+            ref_text_format = ref_cell_formatting['text_format']
+            
+            assert new_text_format['font_family'] == ref_text_format['font_family']
+            assert new_text_format['font_size'] == ref_text_format['font_size']
+            assert new_text_format['font_color'] == ref_text_format['font_color']
+            assert new_text_format['bold'] == ref_text_format['bold']
+            assert new_text_format['italic'] == ref_text_format['italic']
+            assert new_text_format['underlined'] == ref_text_format['underlined']
+            
+            # Verify alignment consistency
+            new_alignment = new_cell_formatting['alignment']
+            ref_alignment = ref_cell_formatting['alignment']
+            
+            assert new_alignment['horizontal'] == ref_alignment['horizontal']
+            assert new_alignment['vertical'] == ref_alignment['vertical']
+            
+            # Verify background color consistency
+            assert new_cell_formatting['background_color'] == ref_cell_formatting['background_color']
+    
+    @pytest.mark.unit
+    def test_add_row_at_beginning_copies_first_row_style(self, document_manager, table_operations, test_doc_path):
+        """Test that adding rows at beginning copies style from first row."""
+        from docx_mcp.models.formatting import TextFormat
+        
+        # Setup
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        
+        # Set distinctive formatting on the first row
+        first_row_format = TextFormat(
+            font_family="Arial",
+            font_size=16,
+            font_color="0000FF",  # Blue
+            bold=True
+        )
+        
+        for col in range(2):
+            table_operations.set_cell_value(
+                str(test_doc_path), 0, 0, col, f"Header {col}",
+                text_format=first_row_format,
+                alignment={"horizontal": "left"},
+                background_color="CCCCCC",  # Gray
+                preserve_existing_format=False
+            )
+        
+        # Add row at beginning
+        add_result = table_operations.add_table_rows(
+            str(test_doc_path), 
+            table_index=0, 
+            count=1, 
+            position="beginning"
+        )
+        
+        assert add_result.status == ResponseStatus.SUCCESS
+        
+        # Verify new row (now at index 0) copied style from original first row (now at index 1)
+        for col in range(2):
+            new_cell = table_operations.get_cell_value(
+                str(test_doc_path), 0, 0, col, include_formatting=True
+            )
+            ref_cell = table_operations.get_cell_value(
+                str(test_doc_path), 0, 1, col, include_formatting=True
+            )
+            
+            # Verify formatting consistency
+            assert new_cell.data['formatting']['text_format']['font_family'] == ref_cell.data['formatting']['text_format']['font_family']
+            assert new_cell.data['formatting']['text_format']['font_size'] == ref_cell.data['formatting']['text_format']['font_size']
+            assert new_cell.data['formatting']['text_format']['font_color'] == ref_cell.data['formatting']['text_format']['font_color']
+            assert new_cell.data['formatting']['text_format']['bold'] == ref_cell.data['formatting']['text_format']['bold']
+            assert new_cell.data['formatting']['alignment']['horizontal'] == ref_cell.data['formatting']['alignment']['horizontal']
+            assert new_cell.data['formatting']['background_color'] == ref_cell.data['formatting']['background_color']
+    
+    @pytest.mark.unit
+    def test_add_row_with_custom_style_source(self, document_manager, table_operations, test_doc_path):
+        """Test adding row with explicitly specified style source row."""
+        from docx_mcp.models.formatting import TextFormat
+        
+        # Setup: Create table with different row styles
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=3, cols=2)
+        
+        # Style row 0 with one format
+        row0_format = TextFormat(font_family="Arial", font_size=12, bold=True)
+        for col in range(2):
+            table_operations.set_cell_value(
+                str(test_doc_path), 0, 0, col, f"Row0-{col}",
+                text_format=row0_format,
+                background_color="FFCCCC"  # Light red
+            )
+        
+        # Style row 1 with different format
+        row1_format = TextFormat(font_family="Calibri", font_size=16, italic=True)
+        for col in range(2):
+            table_operations.set_cell_value(
+                str(test_doc_path), 0, 1, col, f"Row1-{col}",
+                text_format=row1_format,
+                background_color="CCFFCC"  # Light green
+            )
+        
+        # Style row 2 with another format
+        row2_format = TextFormat(font_family="Times New Roman", font_size=10, underline=True)
+        for col in range(2):
+            table_operations.set_cell_value(
+                str(test_doc_path), 0, 2, col, f"Row2-{col}",
+                text_format=row2_format,
+                background_color="CCCCFF"  # Light blue
+            )
+        
+        # Add new row and explicitly copy style from row 1
+        add_result = table_operations.add_table_rows(
+            str(test_doc_path), 
+            table_index=0, 
+            count=1, 
+            position="end",
+            copy_style_from_row=1  # Explicitly copy from row 1
+        )
+        
+        assert add_result.status == ResponseStatus.SUCCESS
+        assert add_result.data['new_row_count'] == 4
+        
+        # Verify new row (index 3) has same style as row 1
+        for col in range(2):
+            new_cell = table_operations.get_cell_value(
+                str(test_doc_path), 0, 3, col, include_formatting=True
+            )
+            ref_cell = table_operations.get_cell_value(
+                str(test_doc_path), 0, 1, col, include_formatting=True
+            )
+            
+            # Should match row 1 style, not row 2 style
+            assert new_cell.data['formatting']['text_format']['font_family'] == "Calibri"
+            assert new_cell.data['formatting']['text_format']['font_size'] == 16
+            assert new_cell.data['formatting']['text_format']['italic'] is True
+            assert new_cell.data['formatting']['background_color'] == "CCFFCC"
+            
+            # Verify it matches the reference exactly
+            assert new_cell.data['formatting'] == ref_cell.data['formatting']
