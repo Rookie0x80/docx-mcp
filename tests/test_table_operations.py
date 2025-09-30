@@ -1007,3 +1007,279 @@ class TestTableAnalysisOperations:
         
         # Verify this workflow provides comprehensive table understanding
         # This is exactly what AI models need to understand table structure before modifications
+
+
+class TestEnhancedCellOperations:
+    """Test enhanced cell operations with formatting support."""
+
+    @pytest.fixture
+    def setup_formatted_cell_table(self, document_manager, table_operations, test_doc_path):
+        """Set up a table with formatted cells for testing."""
+        from docx.shared import RGBColor
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        # Create table
+        table_operations.create_table(str(test_doc_path), rows=3, cols=3, headers=["Name", "Value", "Notes"])
+        
+        # Add some formatted data using the document directly
+        document = document_manager.get_document(str(test_doc_path))
+        table = document.tables[0]
+        
+        # Format header row - bold and centered
+        for cell in table.rows[0].cells:
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.font.bold = True
+                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Add and format some data
+        table.cell(1, 0).text = "Alice"
+        table.cell(1, 1).text = "100"
+        table.cell(1, 2).text = "Important"
+        
+        # Make first data row italic
+        for cell in table.rows[1].cells:
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.font.italic = True
+        
+        # Right-align the Value column
+        table.cell(1, 1).paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        table.cell(2, 1).paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        
+        return 0  # table index
+
+    @pytest.mark.unit
+    def test_get_cell_value_with_formatting(self, table_operations, test_doc_path, setup_formatted_cell_table):
+        """Test getting cell value with formatting information."""
+        table_index = setup_formatted_cell_table
+        
+        # Get header cell with formatting
+        result = table_operations.get_cell_value(str(test_doc_path), table_index, 0, 0, include_formatting=True)
+        
+        assert result.status == ResponseStatus.SUCCESS
+        
+        data = result.data
+        assert data['value'] == "Name"
+        assert data['is_empty'] is False
+        
+        # Check formatting information
+        formatting = data['formatting']
+        assert formatting['text_format']['bold'] is True
+        assert formatting['alignment']['horizontal'] == 'center'
+        assert data['merge_info'] is None
+
+    @pytest.mark.unit
+    def test_get_cell_value_without_formatting(self, table_operations, test_doc_path, setup_formatted_cell_table):
+        """Test getting cell value without formatting information."""
+        table_index = setup_formatted_cell_table
+        
+        result = table_operations.get_cell_value(str(test_doc_path), table_index, 1, 0, include_formatting=False)
+        
+        assert result.status == ResponseStatus.SUCCESS
+        
+        data = result.data
+        assert data['value'] == "Alice"
+        assert data['is_empty'] is False
+        assert 'formatting' not in data
+        assert 'merge_info' not in data
+
+    @pytest.mark.unit
+    def test_set_cell_value_with_text_formatting(self, document_manager, table_operations, test_doc_path):
+        """Test setting cell value with text formatting."""
+        from docx_mcp.models.formatting import TextFormat
+        
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        
+        # Set cell with specific text formatting
+        text_format = TextFormat(
+            font_family="Arial",
+            font_size=14,
+            font_color="FF0000",  # Red
+            bold=True,
+            italic=False
+        )
+        
+        result = table_operations.set_cell_value(
+            str(test_doc_path), 0, 0, 0, "Formatted Text",
+            text_format=text_format,
+            preserve_existing_format=False
+        )
+        
+        assert result.status == ResponseStatus.SUCCESS
+        
+        data = result.data
+        assert data['value'] == "Formatted Text"
+        
+        applied_formatting = data['applied_formatting']
+        assert applied_formatting['text_format']['font_family'] == "Arial"
+        assert applied_formatting['text_format']['bold'] is True
+
+    @pytest.mark.unit
+    def test_set_cell_value_with_alignment(self, document_manager, table_operations, test_doc_path):
+        """Test setting cell value with alignment."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        
+        # Set cell with alignment
+        alignment = {"horizontal": "right", "vertical": "middle"}
+        
+        result = table_operations.set_cell_value(
+            str(test_doc_path), 0, 0, 0, "Right Aligned",
+            alignment=alignment,
+            preserve_existing_format=False
+        )
+        
+        assert result.status == ResponseStatus.SUCCESS
+        
+        data = result.data
+        applied_formatting = data['applied_formatting']
+        assert applied_formatting['alignment']['horizontal'] == 'right'
+
+    @pytest.mark.unit
+    def test_set_cell_value_with_background_color(self, document_manager, table_operations, test_doc_path):
+        """Test setting cell value with background color."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        
+        # Set cell with background color
+        result = table_operations.set_cell_value(
+            str(test_doc_path), 0, 0, 0, "Yellow Background",
+            background_color="FFFF00",  # Yellow
+            preserve_existing_format=False
+        )
+        
+        assert result.status == ResponseStatus.SUCCESS
+        
+        data = result.data
+        applied_formatting = data['applied_formatting']
+        assert applied_formatting['background_color'] == "FFFF00"
+        assert data['value'] == "Yellow Background"
+
+    @pytest.mark.unit
+    def test_set_cell_value_preserve_existing_format(self, table_operations, test_doc_path, setup_formatted_cell_table):
+        """Test setting cell value while preserving existing formatting."""
+        table_index = setup_formatted_cell_table
+        
+        # Get original formatting of a header cell
+        original_result = table_operations.get_cell_value(str(test_doc_path), table_index, 0, 0, include_formatting=True)
+        original_formatting = original_result.data['formatting']
+        
+        # Set new value while preserving formatting
+        result = table_operations.set_cell_value(
+            str(test_doc_path), table_index, 0, 0, "New Header",
+            preserve_existing_format=True
+        )
+        
+        assert result.status == ResponseStatus.SUCCESS
+        assert result.data['value'] == "New Header"
+        
+        # Verify formatting is preserved
+        applied_formatting = result.data['applied_formatting']
+        assert applied_formatting['text_format']['bold'] is True
+        assert applied_formatting['alignment']['horizontal'] == 'center'
+
+    @pytest.mark.unit
+    def test_set_cell_value_override_existing_format(self, table_operations, test_doc_path, setup_formatted_cell_table):
+        """Test setting cell value and overriding existing formatting."""
+        from docx_mcp.models.formatting import TextFormat
+        
+        table_index = setup_formatted_cell_table
+        
+        # Override existing formatting
+        new_format = TextFormat(
+            font_family="Times New Roman",
+            font_size=12,
+            bold=False,
+            italic=True
+        )
+        
+        result = table_operations.set_cell_value(
+            str(test_doc_path), table_index, 0, 0, "New Style",
+            text_format=new_format,
+            alignment={"horizontal": "left"},
+            preserve_existing_format=False
+        )
+        
+        assert result.status == ResponseStatus.SUCCESS
+        
+        applied_formatting = result.data['applied_formatting']
+        assert applied_formatting['text_format']['bold'] is False
+        assert applied_formatting['text_format']['italic'] is True
+        assert applied_formatting['alignment']['horizontal'] == 'left'
+
+    @pytest.mark.unit
+    def test_enhanced_cell_operations_workflow(self, document_manager, table_operations, test_doc_path):
+        """Test complete workflow of enhanced cell operations."""
+        from docx_mcp.models.formatting import TextFormat
+        
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        # Create table
+        table_operations.create_table(str(test_doc_path), rows=3, cols=2, headers=["Product", "Price"])
+        
+        # Step 1: Get header formatting to understand current style
+        header_result = table_operations.get_cell_value(str(test_doc_path), 0, 0, 0, include_formatting=True)
+        assert header_result.status == ResponseStatus.SUCCESS
+        
+        # Step 2: Add data while preserving header style for consistency
+        result1 = table_operations.set_cell_value(
+            str(test_doc_path), 0, 1, 0, "Laptop",
+            preserve_existing_format=True
+        )
+        assert result1.status == ResponseStatus.SUCCESS
+        
+        # Step 3: Add price with specific formatting (right-aligned)
+        result2 = table_operations.set_cell_value(
+            str(test_doc_path), 0, 1, 1, "$999.99",
+            alignment={"horizontal": "right"},
+            text_format=TextFormat(bold=True),
+            preserve_existing_format=False
+        )
+        assert result2.status == ResponseStatus.SUCCESS
+        
+        # Step 4: Verify the applied formatting
+        price_result = table_operations.get_cell_value(str(test_doc_path), 0, 1, 1, include_formatting=True)
+        assert price_result.status == ResponseStatus.SUCCESS
+        
+        price_formatting = price_result.data['formatting']
+        assert price_formatting['text_format']['bold'] is True
+        assert price_formatting['alignment']['horizontal'] == 'right'
+        
+        # This workflow demonstrates how AI models can:
+        # 1. Understand existing formatting
+        # 2. Preserve consistent styling
+        # 3. Apply specific formatting when needed
+        # 4. Maintain table visual coherence
+
+    @pytest.mark.unit
+    def test_set_cell_value_invalid_formatting(self, document_manager, table_operations, test_doc_path):
+        """Test setting cell value with invalid formatting parameters."""
+        from docx_mcp.models.formatting import TextFormat
+        
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        
+        # Test with invalid color format - should not crash
+        result = table_operations.set_cell_value(
+            str(test_doc_path), 0, 0, 0, "Test",
+            text_format=TextFormat(font_color="invalid_color"),
+            preserve_existing_format=False
+        )
+        
+        # Should succeed but ignore invalid color
+        assert result.status == ResponseStatus.SUCCESS
+        assert result.data['value'] == "Test"
+
+    @pytest.mark.unit
+    def test_enhanced_cell_operations_error_handling(self, table_operations):
+        """Test error handling in enhanced cell operations."""
+        # Test with non-existent document
+        result = table_operations.get_cell_value("nonexistent.docx", 0, 0, 0)
+        assert result.status == ResponseStatus.ERROR
+        
+        result = table_operations.set_cell_value("nonexistent.docx", 0, 0, 0, "test")
+        assert result.status == ResponseStatus.ERROR

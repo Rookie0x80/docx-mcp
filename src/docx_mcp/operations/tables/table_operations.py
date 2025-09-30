@@ -12,6 +12,7 @@ from ...models.table_analysis import (
     TableStructureAnalysis, CellStyleAnalysis, TableAnalysisResult, MergeInfo,
     CellMergeType, analyze_cell_merge, extract_cell_formatting
 )
+from ...models.formatting import TextFormat, CellAlignment
 from ...utils.exceptions import (
     TableNotFoundError,
     InvalidTableIndexError,
@@ -354,10 +355,19 @@ class TableOperations:
             return OperationResponse.error(f"Failed to delete rows: {str(e)}")
     
     def set_cell_value(
-        self, file_path: str, table_index: int, row_index: int, column_index: int, value: str
+        self, 
+        file_path: str, 
+        table_index: int, 
+        row_index: int, 
+        column_index: int, 
+        value: str,
+        text_format: Optional[TextFormat] = None,
+        alignment: Optional[Dict[str, str]] = None,
+        background_color: Optional[str] = None,
+        preserve_existing_format: bool = True
     ) -> OperationResponse:
         """
-        Set the value of a specific cell.
+        Set the value of a specific cell with optional formatting.
         
         Args:
             file_path: Path to the document
@@ -365,11 +375,18 @@ class TableOperations:
             row_index: Row index
             column_index: Column index
             value: Value to set
+            text_format: Optional text formatting (font, size, color, bold, italic, etc.)
+            alignment: Optional alignment settings {"horizontal": "left/center/right", "vertical": "top/middle/bottom"}
+            background_color: Optional background color as hex string (e.g., "FFFF00")
+            preserve_existing_format: Whether to preserve existing formatting when not specified
             
         Returns:
             OperationResponse with operation result
         """
         try:
+            from docx.shared import RGBColor
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            
             document = self.document_manager.get_document(file_path)
             if not document:
                 return OperationResponse.error(f"Document not loaded: {file_path}")
@@ -379,19 +396,164 @@ class TableOperations:
             
             validate_cell_position(row_index, column_index, len(table.rows), len(table.columns))
             
-            # Set cell value
+            # Get cell and set value
             cell = table.cell(row_index, column_index)
+            
+            # Store existing formatting if preserve_existing_format is True
+            existing_format = None
+            if preserve_existing_format:
+                existing_format = extract_cell_formatting(cell)
+            
+            # Clear existing content and set new value
             cell.text = sanitize_string(value)
+            
+            # Apply formatting if provided
+            if cell.paragraphs:
+                paragraph = cell.paragraphs[0]
+                
+                # Apply paragraph alignment
+                if alignment and alignment.get('horizontal'):
+                    h_align = alignment['horizontal'].lower()
+                    alignment_map = {
+                        'left': WD_ALIGN_PARAGRAPH.LEFT,
+                        'center': WD_ALIGN_PARAGRAPH.CENTER,
+                        'right': WD_ALIGN_PARAGRAPH.RIGHT,
+                        'justify': WD_ALIGN_PARAGRAPH.JUSTIFY
+                    }
+                    if h_align in alignment_map:
+                        paragraph.alignment = alignment_map[h_align]
+                elif preserve_existing_format and existing_format and existing_format.get('horizontal_alignment'):
+                    # Restore existing alignment
+                    h_align = existing_format['horizontal_alignment']
+                    alignment_map = {
+                        'left': WD_ALIGN_PARAGRAPH.LEFT,
+                        'center': WD_ALIGN_PARAGRAPH.CENTER,
+                        'right': WD_ALIGN_PARAGRAPH.RIGHT,
+                        'justify': WD_ALIGN_PARAGRAPH.JUSTIFY
+                    }
+                    if h_align in alignment_map:
+                        paragraph.alignment = alignment_map[h_align]
+                
+                # Apply text formatting to runs
+                if paragraph.runs:
+                    run = paragraph.runs[0]
+                    
+                    # Apply or preserve text formatting
+                    if text_format:
+                        if text_format.font_family:
+                            run.font.name = text_format.font_family
+                        if text_format.font_size:
+                            run.font.size = text_format.font_size
+                        if text_format.font_color:
+                            # Parse hex color
+                            try:
+                                color_hex = text_format.font_color.lstrip('#')
+                                if len(color_hex) == 6:
+                                    r = int(color_hex[0:2], 16)
+                                    g = int(color_hex[2:4], 16)
+                                    b = int(color_hex[4:6], 16)
+                                    run.font.color.rgb = RGBColor(r, g, b)
+                            except (ValueError, AttributeError):
+                                pass  # Skip invalid color
+                        if text_format.bold is not None:
+                            run.font.bold = text_format.bold
+                        if text_format.italic is not None:
+                            run.font.italic = text_format.italic
+                        if text_format.underline is not None:
+                            run.font.underline = text_format.underline
+                    elif preserve_existing_format and existing_format:
+                        # Restore existing text formatting
+                        if existing_format.get('font_family'):
+                            run.font.name = existing_format['font_family']
+                        if existing_format.get('font_size'):
+                            from docx.shared import Pt
+                            run.font.size = Pt(existing_format['font_size'])
+                        if existing_format.get('font_color'):
+                            try:
+                                color_hex = existing_format['font_color'].lstrip('#')
+                                if len(color_hex) == 6:
+                                    r = int(color_hex[0:2], 16)
+                                    g = int(color_hex[2:4], 16)
+                                    b = int(color_hex[4:6], 16)
+                                    run.font.color.rgb = RGBColor(r, g, b)
+                            except (ValueError, AttributeError):
+                                pass
+                        if existing_format.get('is_bold'):
+                            run.font.bold = existing_format['is_bold']
+                        if existing_format.get('is_italic'):
+                            run.font.italic = existing_format['is_italic']
+                        if existing_format.get('is_underlined'):
+                            run.font.underline = existing_format['is_underlined']
+            
+            # Apply background color if provided
+            if background_color:
+                try:
+                    # Apply cell shading using proper XML construction
+                    from docx.oxml.shared import qn
+                    from docx.oxml import parse_xml
+                    
+                    tc_pr = cell._element.get_or_add_tcPr()
+                    
+                    # Remove existing shading if present
+                    existing_shd = tc_pr.find(qn('w:shd'))
+                    if existing_shd is not None:
+                        tc_pr.remove(existing_shd)
+                    
+                    # Create new shading element with proper namespace
+                    shd_xml = f'''<w:shd xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" 
+                                 w:val="clear" w:color="auto" w:fill="{background_color.lstrip('#')}"/>'''
+                    shd_element = parse_xml(shd_xml)
+                    tc_pr.append(shd_element)
+                except Exception:
+                    pass  # Skip if background color application fails
+            elif preserve_existing_format and existing_format and existing_format.get('background_color'):
+                # Restore existing background color
+                try:
+                    from docx.oxml.shared import qn
+                    from docx.oxml import parse_xml
+                    
+                    tc_pr = cell._element.get_or_add_tcPr()
+                    
+                    # Remove existing shading if present
+                    existing_shd = tc_pr.find(qn('w:shd'))
+                    if existing_shd is not None:
+                        tc_pr.remove(existing_shd)
+                    
+                    # Create new shading element with proper namespace
+                    shd_xml = f'''<w:shd xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" 
+                                 w:val="clear" w:color="auto" w:fill="{existing_format["background_color"].lstrip('#')}"/>'''
+                    shd_element = parse_xml(shd_xml)
+                    tc_pr.append(shd_element)
+                except Exception:
+                    pass
+            
+            # Get final formatting for response
+            final_format = extract_cell_formatting(cell)
             
             data = {
                 "table_index": table_index,
                 "row_index": row_index,
                 "column_index": column_index,
-                "value": cell.text
+                "value": cell.text,
+                "applied_formatting": {
+                    "text_format": {
+                        "font_family": final_format.get('font_family'),
+                        "font_size": final_format.get('font_size'),
+                        "font_color": final_format.get('font_color'),
+                        "bold": final_format.get('is_bold', False),
+                        "italic": final_format.get('is_italic', False),
+                        "underlined": final_format.get('is_underlined', False)
+                    },
+                    "alignment": {
+                        "horizontal": final_format.get('horizontal_alignment'),
+                        "vertical": final_format.get('vertical_alignment')
+                    },
+                    "background_color": final_format.get('background_color')
+                }
             }
             
             return OperationResponse.success(
-                f"Cell value set at table {table_index}, row {row_index}, column {column_index}",
+                f"Cell value and formatting set at table {table_index}, row {row_index}, column {column_index}",
                 data
             )
             
@@ -401,19 +563,25 @@ class TableOperations:
             return OperationResponse.error(f"Failed to set cell value: {str(e)}")
     
     def get_cell_value(
-        self, file_path: str, table_index: int, row_index: int, column_index: int
+        self, 
+        file_path: str, 
+        table_index: int, 
+        row_index: int, 
+        column_index: int,
+        include_formatting: bool = True
     ) -> OperationResponse:
         """
-        Get the value of a specific cell.
+        Get the value and formatting of a specific cell.
         
         Args:
             file_path: Path to the document
             table_index: Index of the table
             row_index: Row index
             column_index: Column index
+            include_formatting: Whether to include detailed formatting information
             
         Returns:
-            OperationResponse with cell value
+            OperationResponse with cell value and formatting
         """
         try:
             document = self.document_manager.get_document(file_path)
@@ -425,7 +593,7 @@ class TableOperations:
             
             validate_cell_position(row_index, column_index, len(table.rows), len(table.columns))
             
-            # Get cell value
+            # Get cell and its value
             cell = table.cell(row_index, column_index)
             value = cell.text
             
@@ -433,10 +601,57 @@ class TableOperations:
                 "table_index": table_index,
                 "row_index": row_index,
                 "column_index": column_index,
-                "value": value
+                "value": value,
+                "is_empty": not value.strip()
             }
             
-            return OperationResponse.success("Cell value retrieved", data)
+            # Include formatting information if requested
+            if include_formatting:
+                cell_format = extract_cell_formatting(cell)
+                merge_info = analyze_cell_merge(cell, row_index, column_index)
+                
+                data["formatting"] = {
+                    "text_format": {
+                        "font_family": cell_format.get('font_family'),
+                        "font_size": cell_format.get('font_size'),
+                        "font_color": cell_format.get('font_color'),
+                        "bold": cell_format.get('is_bold', False),
+                        "italic": cell_format.get('is_italic', False),
+                        "underlined": cell_format.get('is_underlined', False),
+                        "strikethrough": cell_format.get('is_strikethrough', False)
+                    },
+                    "alignment": {
+                        "horizontal": cell_format.get('horizontal_alignment'),
+                        "vertical": cell_format.get('vertical_alignment')
+                    },
+                    "background_color": cell_format.get('background_color'),
+                    "borders": {
+                        "top": cell_format.get('borders', {}).get('top'),
+                        "bottom": cell_format.get('borders', {}).get('bottom'),
+                        "left": cell_format.get('borders', {}).get('left'),
+                        "right": cell_format.get('borders', {}).get('right')
+                    }
+                }
+                
+                # Include merge information if cell is merged
+                if merge_info:
+                    data["merge_info"] = {
+                        "type": merge_info.merge_type.value,
+                        "start_row": merge_info.start_row,
+                        "end_row": merge_info.end_row,
+                        "start_col": merge_info.start_col,
+                        "end_col": merge_info.end_col,
+                        "span_rows": merge_info.span_rows,
+                        "span_cols": merge_info.span_cols
+                    }
+                else:
+                    data["merge_info"] = None
+            
+            message = "Cell value retrieved"
+            if include_formatting:
+                message += " with formatting"
+            
+            return OperationResponse.success(message, data)
             
         except (InvalidTableIndexError, InvalidCellPositionError) as e:
             return OperationResponse.error(str(e))

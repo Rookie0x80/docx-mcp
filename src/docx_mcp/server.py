@@ -200,9 +200,23 @@ def set_cell_value(
     table_index: int,
     row_index: int,
     column_index: int,
-    value: str
+    value: str,
+    font_family: Optional[str] = None,
+    font_size: Optional[int] = None,
+    font_color: Optional[str] = None,
+    bold: Optional[bool] = None,
+    italic: Optional[bool] = None,
+    underline: Optional[bool] = None,
+    horizontal_alignment: Optional[str] = None,
+    vertical_alignment: Optional[str] = None,
+    background_color: Optional[str] = None,
+    preserve_existing_format: bool = True
 ) -> Dict[str, Any]:
-    """Set the value of a specific cell.
+    """Set the value and optional formatting of a specific cell.
+    
+    This enhanced version allows AI models to set cell values while preserving
+    or applying specific formatting. This is crucial for maintaining table
+    consistency when filling in data.
     
     Args:
         file_path: Path to the document file
@@ -210,13 +224,48 @@ def set_cell_value(
         row_index: Row index (>= 0)
         column_index: Column index (>= 0)
         value: Value to set
+        font_family: Optional font family (e.g., "Arial", "Times New Roman")
+        font_size: Optional font size in points (8-72)
+        font_color: Optional font color as hex string (e.g., "FF0000" for red)
+        bold: Optional bold formatting
+        italic: Optional italic formatting
+        underline: Optional underline formatting
+        horizontal_alignment: Optional horizontal alignment ("left", "center", "right", "justify")
+        vertical_alignment: Optional vertical alignment ("top", "middle", "bottom")
+        background_color: Optional background color as hex string (e.g., "FFFF00" for yellow)
+        preserve_existing_format: Whether to preserve existing formatting when not specified (default: True)
     """
+    # Build text format if any text formatting is specified
+    text_format = None
+    if any([font_family, font_size, font_color, bold, italic, underline]):
+        text_format = TextFormat(
+            font_family=font_family,
+            font_size=font_size,
+            font_color=font_color,
+            bold=bold,
+            italic=italic,
+            underline=underline
+        )
+    
+    # Build alignment if any alignment is specified
+    alignment = None
+    if horizontal_alignment or vertical_alignment:
+        alignment = {}
+        if horizontal_alignment:
+            alignment["horizontal"] = horizontal_alignment
+        if vertical_alignment:
+            alignment["vertical"] = vertical_alignment
+    
     result = table_operations.set_cell_value(
         file_path,
         table_index,
         row_index,
         column_index,
-        value
+        value,
+        text_format=text_format,
+        alignment=alignment,
+        background_color=background_color,
+        preserve_existing_format=preserve_existing_format
     )
     return result.to_dict()
 
@@ -226,21 +275,28 @@ def get_cell_value(
     file_path: str,
     table_index: int,
     row_index: int,
-    column_index: int
+    column_index: int,
+    include_formatting: bool = True
 ) -> Dict[str, Any]:
-    """Get the value of a specific cell.
+    """Get the value and formatting of a specific cell.
+    
+    This enhanced version returns both the cell value and its complete formatting
+    information, allowing AI models to understand the current styling before
+    making changes. This is essential for maintaining formatting consistency.
     
     Args:
         file_path: Path to the document file
         table_index: Index of the table (>= 0)
         row_index: Row index (>= 0)
         column_index: Column index (>= 0)
+        include_formatting: Whether to include detailed formatting information (default: True)
     """
     result = table_operations.get_cell_value(
         file_path,
         table_index,
         row_index,
-        column_index
+        column_index,
+        include_formatting=include_formatting
     )
     return result.to_dict()
 
