@@ -438,12 +438,38 @@ class TableOperations:
                 if paragraph.runs:
                     run = paragraph.runs[0]
                     
-                    # Apply or preserve text formatting
+                    # Apply text formatting
+                    if preserve_existing_format and existing_format:
+                        # First restore existing text formatting
+                        if existing_format.get('font_family'):
+                            run.font.name = existing_format['font_family']
+                        if existing_format.get('font_size'):
+                            from docx.shared import Pt
+                            run.font.size = Pt(existing_format['font_size'])
+                        if existing_format.get('font_color'):
+                            try:
+                                color_hex = existing_format['font_color'].lstrip('#')
+                                if len(color_hex) == 6:
+                                    r = int(color_hex[0:2], 16)
+                                    g = int(color_hex[2:4], 16)
+                                    b = int(color_hex[4:6], 16)
+                                    run.font.color.rgb = RGBColor(r, g, b)
+                            except (ValueError, AttributeError):
+                                pass
+                        if existing_format.get('is_bold') is not None:
+                            run.font.bold = existing_format['is_bold']
+                        if existing_format.get('is_italic') is not None:
+                            run.font.italic = existing_format['is_italic']
+                        if existing_format.get('is_underlined') is not None:
+                            run.font.underline = existing_format['is_underlined']
+                    
+                    # Then apply new text formatting (overrides existing)
                     if text_format:
                         if text_format.font_family:
                             run.font.name = text_format.font_family
                         if text_format.font_size:
-                            run.font.size = text_format.font_size
+                            from docx.shared import Pt
+                            run.font.size = Pt(text_format.font_size)
                         if text_format.font_color:
                             # Parse hex color
                             try:
@@ -461,29 +487,59 @@ class TableOperations:
                             run.font.italic = text_format.italic
                         if text_format.underline is not None:
                             run.font.underline = text_format.underline
-                    elif preserve_existing_format and existing_format:
-                        # Restore existing text formatting
-                        if existing_format.get('font_family'):
-                            run.font.name = existing_format['font_family']
-                        if existing_format.get('font_size'):
-                            from docx.shared import Pt
-                            run.font.size = Pt(existing_format['font_size'])
-                        if existing_format.get('font_color'):
-                            try:
-                                color_hex = existing_format['font_color'].lstrip('#')
-                                if len(color_hex) == 6:
-                                    r = int(color_hex[0:2], 16)
-                                    g = int(color_hex[2:4], 16)
-                                    b = int(color_hex[4:6], 16)
-                                    run.font.color.rgb = RGBColor(r, g, b)
-                            except (ValueError, AttributeError):
-                                pass
-                        if existing_format.get('is_bold'):
-                            run.font.bold = existing_format['is_bold']
-                        if existing_format.get('is_italic'):
-                            run.font.italic = existing_format['is_italic']
-                        if existing_format.get('is_underlined'):
-                            run.font.underline = existing_format['is_underlined']
+            
+            # Apply vertical alignment if provided
+            if alignment and alignment.get('vertical'):
+                try:
+                    from docx.oxml.shared import qn, OxmlElement
+                    
+                    v_align = alignment['vertical'].lower()
+                    alignment_map = {
+                        'top': 'top',
+                        'middle': 'center',
+                        'bottom': 'bottom'
+                    }
+                    
+                    if v_align in alignment_map:
+                        tc_pr = cell._element.get_or_add_tcPr()
+                        
+                        # Remove existing vAlign if present
+                        existing_valign = tc_pr.find(qn('w:vAlign'))
+                        if existing_valign is not None:
+                            tc_pr.remove(existing_valign)
+                        
+                        # Add new vAlign
+                        valign_element = OxmlElement('w:vAlign')
+                        valign_element.set(qn('w:val'), alignment_map[v_align])
+                        tc_pr.append(valign_element)
+                except Exception:
+                    pass  # Skip if vertical alignment application fails
+            elif preserve_existing_format and existing_format and existing_format.get('vertical_alignment'):
+                # Restore existing vertical alignment
+                try:
+                    from docx.oxml.shared import qn, OxmlElement
+                    
+                    v_align = existing_format['vertical_alignment'].lower()
+                    alignment_map = {
+                        'top': 'top',
+                        'middle': 'center',
+                        'bottom': 'bottom'
+                    }
+                    
+                    if v_align in alignment_map:
+                        tc_pr = cell._element.get_or_add_tcPr()
+                        
+                        # Remove existing vAlign if present
+                        existing_valign = tc_pr.find(qn('w:vAlign'))
+                        if existing_valign is not None:
+                            tc_pr.remove(existing_valign)
+                        
+                        # Add new vAlign
+                        valign_element = OxmlElement('w:vAlign')
+                        valign_element.set(qn('w:val'), alignment_map[v_align])
+                        tc_pr.append(valign_element)
+                except Exception:
+                    pass
             
             # Apply background color if provided
             if background_color:

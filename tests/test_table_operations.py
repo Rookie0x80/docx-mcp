@@ -1283,3 +1283,523 @@ class TestEnhancedCellOperations:
         
         result = table_operations.set_cell_value("nonexistent.docx", 0, 0, 0, "test")
         assert result.status == ResponseStatus.ERROR
+
+
+class TestCellValueIntegration:
+    """Integration tests for set_cell_value and get_cell_value operations.
+    
+    These tests focus on verifying that formatting applied via set_cell_value
+    can be correctly retrieved via get_cell_value, ensuring consistency
+    between the two operations.
+    """
+
+    @pytest.mark.unit
+    def test_text_formatting_consistency(self, document_manager, table_operations, test_doc_path):
+        """Test that text formatting set via set_cell_value is correctly retrieved by get_cell_value."""
+        from docx_mcp.models.formatting import TextFormat
+        
+        # Setup
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        
+        # Define comprehensive text formatting
+        expected_format = {
+            "font_family": "Times New Roman",
+            "font_size": 16,
+            "font_color": "FF0000",  # Red
+            "bold": True,
+            "italic": True,
+            "underline": True
+        }
+        
+        text_format = TextFormat(**expected_format)
+        
+        # Set cell value with formatting
+        set_result = table_operations.set_cell_value(
+            str(test_doc_path), 0, 0, 0, "Formatted Text",
+            text_format=text_format,
+            preserve_existing_format=False
+        )
+        
+        assert set_result.status == ResponseStatus.SUCCESS
+        assert set_result.data['value'] == "Formatted Text"
+        
+        # Get cell value and verify formatting consistency
+        get_result = table_operations.get_cell_value(
+            str(test_doc_path), 0, 0, 0, include_formatting=True
+        )
+        
+        assert get_result.status == ResponseStatus.SUCCESS
+        assert get_result.data['value'] == "Formatted Text"
+        
+        # Verify all text formatting properties
+        retrieved_format = get_result.data['formatting']['text_format']
+        assert retrieved_format['font_family'] == expected_format['font_family']
+        assert retrieved_format['font_size'] == expected_format['font_size']
+        assert retrieved_format['font_color'] == expected_format['font_color']
+        assert retrieved_format['bold'] == expected_format['bold']
+        assert retrieved_format['italic'] == expected_format['italic']
+        assert retrieved_format['underlined'] == expected_format['underline']
+
+    @pytest.mark.unit
+    def test_alignment_consistency(self, document_manager, table_operations, test_doc_path):
+        """Test that alignment settings are consistent between set and get operations."""
+        # Setup
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=3, cols=3)
+        
+        # Test different alignment combinations
+        alignment_tests = [
+            {"horizontal": "left", "vertical": "top"},
+            {"horizontal": "center", "vertical": "middle"},
+            {"horizontal": "right", "vertical": "bottom"},
+            {"horizontal": "justify", "vertical": "top"}
+        ]
+        
+        for i, expected_alignment in enumerate(alignment_tests):
+            row, col = divmod(i, 2)
+            
+            # Set cell with specific alignment
+            set_result = table_operations.set_cell_value(
+                str(test_doc_path), 0, row, col, f"Aligned Text {i+1}",
+                alignment=expected_alignment,
+                preserve_existing_format=False
+            )
+            
+            assert set_result.status == ResponseStatus.SUCCESS
+            
+            # Verify alignment was applied in set operation
+            applied_alignment = set_result.data['applied_formatting']['alignment']
+            assert applied_alignment['horizontal'] == expected_alignment['horizontal']
+            
+            # Note: 'middle' gets converted to 'center' internally in Word
+            expected_vertical = expected_alignment['vertical']
+            if expected_vertical == 'middle':
+                expected_vertical = 'center'
+            assert applied_alignment['vertical'] == expected_vertical
+            
+            # Get cell and verify alignment consistency
+            get_result = table_operations.get_cell_value(
+                str(test_doc_path), 0, row, col, include_formatting=True
+            )
+            
+            assert get_result.status == ResponseStatus.SUCCESS
+            retrieved_alignment = get_result.data['formatting']['alignment']
+            assert retrieved_alignment['horizontal'] == expected_alignment['horizontal']
+            assert retrieved_alignment['vertical'] == expected_vertical
+
+    @pytest.mark.unit
+    def test_background_color_consistency(self, document_manager, table_operations, test_doc_path):
+        """Test that background colors are consistent between set and get operations."""
+        # Setup
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=2, cols=3)
+        
+        # Test different background colors
+        color_tests = [
+            "FFFF00",  # Yellow
+            "00FF00",  # Green
+            "0000FF",  # Blue
+            "FF00FF",  # Magenta
+            "00FFFF"   # Cyan
+        ]
+        
+        for i, expected_color in enumerate(color_tests):
+            row, col = divmod(i, 3)
+            
+            # Set cell with background color
+            set_result = table_operations.set_cell_value(
+                str(test_doc_path), 0, row, col, f"Color {i+1}",
+                background_color=expected_color,
+                preserve_existing_format=False
+            )
+            
+            assert set_result.status == ResponseStatus.SUCCESS
+            
+            # Verify background color was applied in set operation
+            applied_bg = set_result.data['applied_formatting']['background_color']
+            assert applied_bg == expected_color
+            
+            # Get cell and verify background color consistency
+            get_result = table_operations.get_cell_value(
+                str(test_doc_path), 0, row, col, include_formatting=True
+            )
+            
+            assert get_result.status == ResponseStatus.SUCCESS
+            retrieved_bg = get_result.data['formatting']['background_color']
+            assert retrieved_bg == expected_color
+
+    @pytest.mark.unit
+    def test_comprehensive_formatting_consistency(self, document_manager, table_operations, test_doc_path):
+        """Test comprehensive formatting consistency with all properties combined."""
+        from docx_mcp.models.formatting import TextFormat
+        
+        # Setup
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        
+        # Define comprehensive formatting
+        expected_text_format = TextFormat(
+            font_family="Arial",
+            font_size=14,
+            font_color="800080",  # Purple
+            bold=True,
+            italic=False,
+            underline=True
+        )
+        
+        expected_alignment = {
+            "horizontal": "center",
+            "vertical": "middle"
+        }
+        
+        expected_background = "FFFFCC"  # Light yellow
+        
+        # Set cell with all formatting options
+        set_result = table_operations.set_cell_value(
+            str(test_doc_path), 0, 0, 0, "Fully Formatted",
+            text_format=expected_text_format,
+            alignment=expected_alignment,
+            background_color=expected_background,
+            preserve_existing_format=False
+        )
+        
+        assert set_result.status == ResponseStatus.SUCCESS
+        assert set_result.data['value'] == "Fully Formatted"
+        
+        # Verify all formatting was applied in set operation
+        applied_formatting = set_result.data['applied_formatting']
+        
+        # Check text formatting
+        applied_text = applied_formatting['text_format']
+        assert applied_text['font_family'] == expected_text_format.font_family
+        assert applied_text['font_size'] == expected_text_format.font_size
+        assert applied_text['font_color'] == expected_text_format.font_color
+        assert applied_text['bold'] == expected_text_format.bold
+        assert applied_text['italic'] == expected_text_format.italic
+        assert applied_text['underlined'] == expected_text_format.underline
+        
+        # Check alignment
+        applied_align = applied_formatting['alignment']
+        assert applied_align['horizontal'] == expected_alignment['horizontal']
+        # Note: 'middle' gets converted to 'center' internally
+        expected_v_align = expected_alignment['vertical']
+        if expected_v_align == 'middle':
+            expected_v_align = 'center'
+        assert applied_align['vertical'] == expected_v_align
+        
+        # Check background color
+        assert applied_formatting['background_color'] == expected_background
+        
+        # Get cell and verify complete formatting consistency
+        get_result = table_operations.get_cell_value(
+            str(test_doc_path), 0, 0, 0, include_formatting=True
+        )
+        
+        assert get_result.status == ResponseStatus.SUCCESS
+        assert get_result.data['value'] == "Fully Formatted"
+        
+        retrieved_formatting = get_result.data['formatting']
+        
+        # Verify text formatting consistency
+        retrieved_text = retrieved_formatting['text_format']
+        assert retrieved_text['font_family'] == expected_text_format.font_family
+        assert retrieved_text['font_size'] == expected_text_format.font_size
+        assert retrieved_text['font_color'] == expected_text_format.font_color
+        assert retrieved_text['bold'] == expected_text_format.bold
+        assert retrieved_text['italic'] == expected_text_format.italic
+        assert retrieved_text['underlined'] == expected_text_format.underline
+        
+        # Verify alignment consistency
+        retrieved_align = retrieved_formatting['alignment']
+        assert retrieved_align['horizontal'] == expected_alignment['horizontal']
+        assert retrieved_align['vertical'] == expected_v_align
+        
+        # Verify background color consistency
+        assert retrieved_formatting['background_color'] == expected_background
+
+    @pytest.mark.unit
+    def test_preserve_existing_format_behavior(self, document_manager, table_operations, test_doc_path):
+        """Test preserve_existing_format parameter behavior in set/get consistency."""
+        from docx_mcp.models.formatting import TextFormat
+        
+        # Setup
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        
+        # Step 1: Set initial formatting
+        initial_format = TextFormat(
+            font_family="Arial",
+            font_size=12,
+            bold=True,
+            italic=False
+        )
+        
+        initial_alignment = {"horizontal": "left", "vertical": "top"}
+        initial_background = "CCCCCC"  # Light gray
+        
+        set_result1 = table_operations.set_cell_value(
+            str(test_doc_path), 0, 0, 0, "Initial Text",
+            text_format=initial_format,
+            alignment=initial_alignment,
+            background_color=initial_background,
+            preserve_existing_format=False
+        )
+        
+        assert set_result1.status == ResponseStatus.SUCCESS
+        
+        # Step 2: Update value while preserving existing format
+        set_result2 = table_operations.set_cell_value(
+            str(test_doc_path), 0, 0, 0, "Updated Text",
+            preserve_existing_format=True
+        )
+        
+        assert set_result2.status == ResponseStatus.SUCCESS
+        assert set_result2.data['value'] == "Updated Text"
+        
+        # Verify that formatting was preserved in set operation
+        preserved_formatting = set_result2.data['applied_formatting']
+        assert preserved_formatting['text_format']['font_family'] == "Arial"
+        assert preserved_formatting['text_format']['bold'] is True
+        assert preserved_formatting['alignment']['horizontal'] == "left"
+        assert preserved_formatting['background_color'] == "CCCCCC"
+        
+        # Step 3: Get cell and verify formatting consistency
+        get_result = table_operations.get_cell_value(
+            str(test_doc_path), 0, 0, 0, include_formatting=True
+        )
+        
+        assert get_result.status == ResponseStatus.SUCCESS
+        assert get_result.data['value'] == "Updated Text"
+        
+        # Verify all original formatting is still intact
+        retrieved_formatting = get_result.data['formatting']
+        assert retrieved_formatting['text_format']['font_family'] == "Arial"
+        assert retrieved_formatting['text_format']['font_size'] == 12
+        assert retrieved_formatting['text_format']['bold'] is True
+        assert retrieved_formatting['text_format']['italic'] is False
+        assert retrieved_formatting['alignment']['horizontal'] == "left"
+        assert retrieved_formatting['alignment']['vertical'] == "top"
+        assert retrieved_formatting['background_color'] == "CCCCCC"
+
+    @pytest.mark.unit
+    def test_partial_formatting_updates(self, document_manager, table_operations, test_doc_path):
+        """Test partial formatting updates and their consistency."""
+        from docx_mcp.models.formatting import TextFormat
+        
+        # Setup
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        
+        # Step 1: Set comprehensive initial formatting
+        initial_format = TextFormat(
+            font_family="Times New Roman",
+            font_size=14,
+            font_color="000080",  # Navy
+            bold=True,
+            italic=True,
+            underline=False
+        )
+        
+        set_result1 = table_operations.set_cell_value(
+            str(test_doc_path), 0, 0, 0, "Initial",
+            text_format=initial_format,
+            alignment={"horizontal": "center", "vertical": "middle"},
+            background_color="FFEEEE",  # Light pink
+            preserve_existing_format=False
+        )
+        
+        assert set_result1.status == ResponseStatus.SUCCESS
+        
+        # Step 2: Update only specific formatting properties
+        partial_format = TextFormat(
+            font_color="FF0000",  # Change to red
+            underline=True       # Add underline
+        )
+        
+        set_result2 = table_operations.set_cell_value(
+            str(test_doc_path), 0, 0, 0, "Partially Updated",
+            text_format=partial_format,
+            alignment={"horizontal": "right"},  # Change only horizontal alignment
+            preserve_existing_format=True
+        )
+        
+        assert set_result2.status == ResponseStatus.SUCCESS
+        
+        # Step 3: Verify the mixed formatting
+        get_result = table_operations.get_cell_value(
+            str(test_doc_path), 0, 0, 0, include_formatting=True
+        )
+        
+        assert get_result.status == ResponseStatus.SUCCESS
+        assert get_result.data['value'] == "Partially Updated"
+        
+        retrieved_formatting = get_result.data['formatting']
+        
+        # Verify preserved properties
+        assert retrieved_formatting['text_format']['font_family'] == "Times New Roman"
+        assert retrieved_formatting['text_format']['font_size'] == 14
+        assert retrieved_formatting['text_format']['bold'] is True
+        assert retrieved_formatting['text_format']['italic'] is True
+        # Note: 'middle' gets converted to 'center' internally in Word
+        assert retrieved_formatting['alignment']['vertical'] == "center"
+        assert retrieved_formatting['background_color'] == "FFEEEE"
+        
+        # Verify updated properties
+        assert retrieved_formatting['text_format']['font_color'] == "FF0000"
+        assert retrieved_formatting['text_format']['underlined'] is True
+        assert retrieved_formatting['alignment']['horizontal'] == "right"
+
+    @pytest.mark.unit
+    def test_formatting_edge_cases(self, document_manager, table_operations, test_doc_path):
+        """Test edge cases in formatting consistency."""
+        from docx_mcp.models.formatting import TextFormat
+        
+        # Setup
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=3, cols=2)
+        
+        # Test Case 1: Empty string value with formatting
+        set_result1 = table_operations.set_cell_value(
+            str(test_doc_path), 0, 0, 0, "",
+            text_format=TextFormat(bold=True, font_color="FF0000"),
+            preserve_existing_format=False
+        )
+        
+        assert set_result1.status == ResponseStatus.SUCCESS
+        
+        get_result1 = table_operations.get_cell_value(
+            str(test_doc_path), 0, 0, 0, include_formatting=True
+        )
+        
+        assert get_result1.status == ResponseStatus.SUCCESS
+        assert get_result1.data['value'] == ""
+        assert get_result1.data['is_empty'] is True
+        # Formatting should still be preserved even for empty cells
+        assert get_result1.data['formatting']['text_format']['bold'] is True
+        
+        # Test Case 2: Very long text with formatting
+        long_text = "A" * 1000  # 1000 character string
+        
+        set_result2 = table_operations.set_cell_value(
+            str(test_doc_path), 0, 1, 0, long_text,
+            text_format=TextFormat(italic=True),
+            background_color="FFFFAA",
+            preserve_existing_format=False
+        )
+        
+        assert set_result2.status == ResponseStatus.SUCCESS
+        
+        get_result2 = table_operations.get_cell_value(
+            str(test_doc_path), 0, 1, 0, include_formatting=True
+        )
+        
+        assert get_result2.status == ResponseStatus.SUCCESS
+        assert get_result2.data['value'] == long_text
+        assert get_result2.data['formatting']['text_format']['italic'] is True
+        assert get_result2.data['formatting']['background_color'] == "FFFFAA"
+        
+        # Test Case 3: Special characters with formatting
+        special_text = "Special: !@#$%^&*()_+-=[]{}|;':\",./<>?`~"
+        
+        set_result3 = table_operations.set_cell_value(
+            str(test_doc_path), 0, 2, 0, special_text,
+            text_format=TextFormat(underline=True, font_size=18),
+            preserve_existing_format=False
+        )
+        
+        assert set_result3.status == ResponseStatus.SUCCESS
+        
+        get_result3 = table_operations.get_cell_value(
+            str(test_doc_path), 0, 2, 0, include_formatting=True
+        )
+        
+        assert get_result3.status == ResponseStatus.SUCCESS
+        assert get_result3.data['value'] == special_text
+        assert get_result3.data['formatting']['text_format']['underlined'] is True
+        assert get_result3.data['formatting']['text_format']['font_size'] == 18
+
+    @pytest.mark.unit
+    def test_multiple_cells_formatting_consistency(self, document_manager, table_operations, test_doc_path):
+        """Test formatting consistency across multiple cells."""
+        from docx_mcp.models.formatting import TextFormat
+        
+        # Setup
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        table_operations.create_table(str(test_doc_path), rows=3, cols=3)
+        
+        # Define different formatting for each cell
+        cell_configs = [
+            {
+                "row": 0, "col": 0, "value": "Header 1",
+                "format": TextFormat(bold=True, font_size=16),
+                "alignment": {"horizontal": "center"},
+                "background": "DDDDDD"
+            },
+            {
+                "row": 0, "col": 1, "value": "Header 2", 
+                "format": TextFormat(bold=True, italic=True),
+                "alignment": {"horizontal": "left"},
+                "background": "EEEEEE"
+            },
+            {
+                "row": 1, "col": 0, "value": "Data 1",
+                "format": TextFormat(font_color="0000FF"),
+                "alignment": {"horizontal": "right", "vertical": "top"},
+                "background": None
+            },
+            {
+                "row": 1, "col": 1, "value": "Data 2",
+                "format": TextFormat(underline=True, font_family="Courier New"),
+                "alignment": {"vertical": "bottom"},
+                "background": "FFFFCC"
+            }
+        ]
+        
+        # Set all cells with their respective formatting
+        for config in cell_configs:
+            set_result = table_operations.set_cell_value(
+                str(test_doc_path), 0, config["row"], config["col"], config["value"],
+                text_format=config["format"],
+                alignment=config["alignment"],
+                background_color=config["background"],
+                preserve_existing_format=False
+            )
+            
+            assert set_result.status == ResponseStatus.SUCCESS
+            assert set_result.data['value'] == config["value"]
+        
+        # Verify each cell's formatting consistency
+        for config in cell_configs:
+            get_result = table_operations.get_cell_value(
+                str(test_doc_path), 0, config["row"], config["col"], include_formatting=True
+            )
+            
+            assert get_result.status == ResponseStatus.SUCCESS
+            assert get_result.data['value'] == config["value"]
+            
+            retrieved_formatting = get_result.data['formatting']
+            
+            # Verify text formatting
+            if config["format"].bold is not None:
+                assert retrieved_formatting['text_format']['bold'] == config["format"].bold
+            if config["format"].italic is not None:
+                assert retrieved_formatting['text_format']['italic'] == config["format"].italic
+            if config["format"].underline is not None:
+                assert retrieved_formatting['text_format']['underlined'] == config["format"].underline
+            if config["format"].font_size is not None:
+                assert retrieved_formatting['text_format']['font_size'] == config["format"].font_size
+            if config["format"].font_color is not None:
+                assert retrieved_formatting['text_format']['font_color'] == config["format"].font_color
+            if config["format"].font_family is not None:
+                assert retrieved_formatting['text_format']['font_family'] == config["format"].font_family
+            
+            # Verify alignment
+            if "horizontal" in config["alignment"]:
+                assert retrieved_formatting['alignment']['horizontal'] == config["alignment"]["horizontal"]
+            if "vertical" in config["alignment"]:
+                assert retrieved_formatting['alignment']['vertical'] == config["alignment"]["vertical"]
+            
+            # Verify background color
+            if config["background"]:
+                assert retrieved_formatting['background_color'] == config["background"]

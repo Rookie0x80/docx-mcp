@@ -18,9 +18,10 @@ A comprehensive Model Context Protocol (MCP) server for Microsoft Word document 
 - Support for header rows
 
 **Table Data Operations**
-- Set/get individual cell values
+- Set/get individual cell values with optional styling
 - Bulk table data retrieval (array, object, CSV formats)
 - List all tables in document with metadata
+- Comprehensive table structure and style analysis
 
 ### Phase 2.1 - Cell Formatting ✅ (New!)
 
@@ -37,6 +38,21 @@ A comprehensive Model Context Protocol (MCP) server for Microsoft Word document 
 - Cell background colors (hex color support)
 - Cell borders with customizable styles, widths, and colors
 - Complete formatting (apply all options at once)
+
+### Phase 2.8 - Table Structure Analysis ✅ (New!)
+
+**Comprehensive Table Analysis**
+- Complete table structure analysis with cell-by-cell details
+- Automatic detection of merged cells and their ranges
+- Full style extraction (fonts, colors, alignment, borders)
+- Header row identification using intelligent heuristics
+- Support for analyzing single tables or all tables in document
+
+**LLM-Friendly Formatting**
+- Enhanced cell operations that preserve existing styles
+- Optional style application when setting cell values
+- Detailed formatting information when reading cell values
+- Perfect for maintaining document consistency during LLM operations
 
 ### Phase 2 - Advanced Table Features 🔄 (In Progress)
 
@@ -204,12 +220,16 @@ All tools accept JSON parameters and return JSON responses, making them compatib
 - `delete_table_rows(file_path, table_index, row_indices)` - Delete rows from a table
 
 ### Data Operations
-- `set_cell_value(file_path, table_index, row_index, column_index, value)` - Set individual cell value
-- `get_cell_value(file_path, table_index, row_index, column_index)` - Get individual cell value
+- `set_cell_value(file_path, table_index, row_index, column_index, value, ...)` - Set cell value with optional formatting
+- `get_cell_value(file_path, table_index, row_index, column_index, include_formatting=True)` - Get cell value with formatting info
 - `get_table_data(file_path, table_index, include_headers=True, format="array")` - Get entire table data
 
 ### Query Operations
 - `list_tables(file_path, include_summary=True)` - List all tables in document
+
+### Table Structure Analysis Operations (New in Phase 2.8!)
+- `analyze_table_structure(file_path, table_index)` - Comprehensive analysis of single table structure and styles
+- `analyze_all_tables_structure(file_path)` - Analyze all tables in document with complete details
 
 ### Table Search Operations (New in Phase 2.7!)
 - `search_table_content(file_path, query, search_mode="contains", case_sensitive=False, table_indices=None, max_results=None)` - Search for content within table cells
@@ -281,6 +301,58 @@ Language models can call these tools with JSON parameters:
 }
 ```
 
+**New! Enhanced Cell Operations Examples:**
+```json
+{
+  "tool": "set_cell_value",
+  "parameters": {
+    "file_path": "report.docx",
+    "table_index": 0,
+    "row_index": 1,
+    "column_index": 0,
+    "value": "New Value",
+    "font_family": "Arial",
+    "font_size": 12,
+    "bold": true,
+    "background_color": "FFFF00",
+    "preserve_existing_format": false
+  }
+}
+```
+
+```json
+{
+  "tool": "get_cell_value",
+  "parameters": {
+    "file_path": "report.docx",
+    "table_index": 0,
+    "row_index": 1,
+    "column_index": 0,
+    "include_formatting": true
+  }
+}
+```
+
+**New! Table Structure Analysis Examples:**
+```json
+{
+  "tool": "analyze_table_structure",
+  "parameters": {
+    "file_path": "report.docx",
+    "table_index": 0
+  }
+}
+```
+
+```json
+{
+  "tool": "analyze_all_tables_structure",
+  "parameters": {
+    "file_path": "report.docx"
+  }
+}
+```
+
 **New! Table Search Examples:**
 ```json
 {
@@ -308,7 +380,7 @@ Language models can call these tools with JSON parameters:
 
 ## 🧪 Testing
 
-The project uses pytest for comprehensive testing with 71 test cases covering all functionality.
+The project uses pytest for comprehensive testing with 93 test cases covering all functionality.
 
 Run all tests:
 ```bash
@@ -363,6 +435,14 @@ pytest -v
   - [ ] Filter table rows by column criteria
   - [ ] Sort table data by column values
   - [ ] Find and replace in table content
+
+- [x] **Table Structure Analysis** ✅ **COMPLETED**
+  - [x] Comprehensive table structure analysis
+  - [x] Cell-by-cell style and content extraction
+  - [x] Automatic merged cell detection
+  - [x] Header row identification heuristics
+  - [x] Enhanced cell operations with style preservation
+  - [x] LLM-friendly formatting information
 
 ### Phase 3: Extended Table Features
 **Priority: Medium** - Advanced table manipulation
@@ -507,20 +587,22 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 📊 Project Status
 
-### ✅ Current Capabilities (Phase 1 + 2.1 + 2.7)
-- **🧪 Test Coverage**: 71/71 tests passing (100%)
-- **🛠️ MCP Tools**: 17 available tools (11 core + 4 formatting + 2 search)
-- **📦 Modules**: 7 core modules with clean architecture
-- **🎨 Formatting**: Complete cell formatting support
+### ✅ Current Capabilities (Phase 1 + 2.1 + 2.7 + 2.8)
+- **🧪 Test Coverage**: 93/93 tests passing (100%)
+- **🛠️ MCP Tools**: 19 available tools (11 core + 4 formatting + 2 search + 2 analysis)
+- **📦 Modules**: 8 core modules with clean architecture
+- **🎨 Formatting**: Complete cell formatting support with style preservation
 - **🔍 Search**: Comprehensive table search capabilities
+- **🔬 Analysis**: Deep table structure and style analysis for LLMs
 - **📚 Documentation**: Comprehensive API docs and examples
 
-### 🚀 Recent Additions (Phase 2.7)
-- ✅ **Table Content Search**: Search across all table cells with multiple modes
-- ✅ **Header Search**: Search specifically in table headers
-- ✅ **Search Modes**: Exact match, contains, and regex pattern matching
-- ✅ **Search Options**: Case sensitivity, table filtering, result limiting
-- ✅ **Detailed Results**: Complete match information with table/cell positions
+### 🚀 Recent Additions (Phase 2.8)
+- ✅ **Table Structure Analysis**: Complete analysis of table structure, styles, and merged cells
+- ✅ **Enhanced Cell Operations**: Set/get cell values with optional formatting preservation
+- ✅ **Style Detection**: Automatic extraction of fonts, colors, alignment, borders
+- ✅ **Merge Detection**: Identify and report merged cell regions
+- ✅ **LLM Integration**: Perfect for maintaining document consistency during AI operations
+- ✅ **Background Color Fix**: Resolved background color setting and extraction issues
 
 ### 🎯 Next Milestones
 - **Phase 2.2**: Data import/export (CSV, Excel, JSON)

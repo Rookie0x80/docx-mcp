@@ -347,13 +347,22 @@ def extract_cell_formatting(cell) -> Dict[str, Any]:
                 # Borders
                 tc_borders = tc_pr.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}tcBorders')
                 if tc_borders is not None:
+                    ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
                     for border_side in ["top", "bottom", "left", "right"]:
-                        border_elem = tc_borders.find(f'.//{{{tc_borders.nsmap[None]}}}{border_side}')
+                        # Try multiple methods to find border elements
+                        border_elem = tc_borders.find(f'.//{{{ns}}}{border_side}')
+                        if border_elem is None:
+                            # Fallback: direct child search
+                            for child in tc_borders:
+                                if child.tag == f'{{{ns}}}{border_side}':
+                                    border_elem = child
+                                    break
+                        
                         if border_elem is not None:
                             border_info = {
-                                "style": border_elem.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val'),
-                                "width": border_elem.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}sz'),
-                                "color": border_elem.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}color')
+                                "style": border_elem.get(f'{{{ns}}}val'),
+                                "width": border_elem.get(f'{{{ns}}}sz'),
+                                "color": border_elem.get(f'{{{ns}}}color')
                             }
                             formatting["borders"][border_side] = border_info
                             
