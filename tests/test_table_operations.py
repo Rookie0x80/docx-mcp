@@ -592,3 +592,418 @@ class TestTableSearchOperations:
         # Test invalid table index
         result = table_operations.search_table_content(str(test_doc_path), "test", table_indices=[999])
         assert result.status == ResponseStatus.ERROR
+
+
+class TestTableAnalysisOperations:
+    """Test table structure and style analysis operations."""
+
+    @pytest.fixture
+    def setup_formatted_table(self, document_manager, table_operations, test_doc_path):
+        """Set up a table with various formatting for testing analysis."""
+        from docx import Document
+        from docx.shared import RGBColor
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        # Create table with headers
+        table_operations.create_table(
+            str(test_doc_path), 
+            rows=4, 
+            cols=3, 
+            headers=["Name", "Department", "Salary"]
+        )
+        
+        # Add some data
+        data_rows = [
+            ["Alice Smith", "Engineering", "$75,000"],
+            ["Bob Johnson", "Marketing", "$65,000"],
+            ["Carol Davis", "Sales", "$55,000"]
+        ]
+        
+        for row_idx, row_data in enumerate(data_rows, 1):
+            for col_idx, value in enumerate(row_data):
+                table_operations.set_cell_value(str(test_doc_path), 0, row_idx, col_idx, value)
+        
+        # Apply some formatting using the document directly
+        document = document_manager.get_document(str(test_doc_path))
+        table = document.tables[0]
+        
+        # Make headers bold
+        for cell in table.rows[0].cells:
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.font.bold = True
+                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Apply some formatting to data cells
+        if len(table.rows) > 1:
+            # Make first column (names) italic
+            for row_idx in range(1, len(table.rows)):
+                cell = table.cell(row_idx, 0)
+                for paragraph in cell.paragraphs:
+                    for run in paragraph.runs:
+                        run.font.italic = True
+            
+            # Right-align salary column
+            for row_idx in range(1, len(table.rows)):
+                cell = table.cell(row_idx, 2)
+                for paragraph in cell.paragraphs:
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        
+        return 0  # table index
+
+    @pytest.mark.unit
+    def test_analyze_table_structure_basic(self, document_manager, table_operations, test_doc_path, setup_formatted_table):
+        """Test basic table structure analysis."""
+        table_index = setup_formatted_table
+        
+        result = table_operations.analyze_table_structure(
+            str(test_doc_path), 
+            table_index, 
+            include_cell_details=True
+        )
+        
+        assert result.status == ResponseStatus.SUCCESS
+        
+        data = result.data
+        table_info = data['table_info']
+        header_info = data['header_info']
+        merge_analysis = data['merge_analysis']
+        style_consistency = data['style_consistency']
+        
+        # Check basic table info
+        assert table_info['index'] == 0
+        assert table_info['rows'] == 4
+        assert table_info['columns'] == 3
+        assert table_info['style_name'] in ['Table Grid', 'Normal Table']
+        
+        # Check header detection
+        assert header_info['has_header'] is True
+        assert header_info['header_row_index'] == 0
+        assert header_info['header_cells'] == ["Name", "Department", "Salary"]
+        
+        # Check merge analysis
+        assert merge_analysis['merged_cells_count'] == 0
+        assert len(merge_analysis['merge_regions']) == 0
+        
+        # Check style consistency (should be mixed due to formatting)
+        assert 'fonts' in style_consistency
+        assert 'alignment' in style_consistency
+        assert 'borders' in style_consistency
+
+    @pytest.mark.unit
+    def test_analyze_table_structure_cell_details(self, document_manager, table_operations, test_doc_path, setup_formatted_table):
+        """Test table structure analysis with detailed cell information."""
+        table_index = setup_formatted_table
+        
+        result = table_operations.analyze_table_structure(
+            str(test_doc_path), 
+            table_index, 
+            include_cell_details=True
+        )
+        
+        assert result.status == ResponseStatus.SUCCESS
+        
+        data = result.data
+        cells = data['cells']
+        
+        # Should have 4 rows of cells
+        assert len(cells) == 4
+        
+        # Each row should have 3 columns
+        for row in cells:
+            assert len(row) == 3
+        
+        # Check first row (headers)
+        header_row = cells[0]
+        for cell in header_row:
+            assert cell['content']['text'] in ["Name", "Department", "Salary"]
+            assert not cell['content']['is_empty']
+            assert cell['text_format']['bold'] is True
+            assert cell['alignment']['horizontal'] == 'center'
+            assert cell['merge'] is None
+        
+        # Check first data row
+        data_row = cells[1]
+        name_cell = data_row[0]
+        assert name_cell['content']['text'] == "Alice Smith"
+        assert name_cell['text_format']['italic'] is True
+        
+        salary_cell = data_row[2]
+        assert salary_cell['content']['text'] == "$75,000"
+        assert salary_cell['alignment']['horizontal'] == 'right'
+
+    @pytest.mark.unit
+    def test_analyze_table_structure_without_cell_details(self, document_manager, table_operations, test_doc_path, setup_formatted_table):
+        """Test table structure analysis without detailed cell information."""
+        table_index = setup_formatted_table
+        
+        result = table_operations.analyze_table_structure(
+            str(test_doc_path), 
+            table_index, 
+            include_cell_details=False
+        )
+        
+        assert result.status == ResponseStatus.SUCCESS
+        
+        data = result.data
+        cells = data['cells']
+        
+        # Should still have cell structure but without detailed formatting
+        assert len(cells) == 4
+        
+        # Check that basic cell info is present but detailed formatting is minimal
+        for row in cells:
+            for cell in row:
+                assert 'content' in cell
+                assert 'position' in cell
+                # Detailed formatting should be None or default values
+                assert cell['text_format']['font_family'] is None
+                assert cell['text_format']['font_size'] is None
+
+    @pytest.mark.unit
+    def test_analyze_table_structure_empty_table(self, document_manager, table_operations, test_doc_path):
+        """Test analyzing an empty table."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        # Create empty table
+        table_operations.create_table(str(test_doc_path), rows=1, cols=1)
+        
+        result = table_operations.analyze_table_structure(str(test_doc_path), 0)
+        
+        assert result.status == ResponseStatus.SUCCESS
+        
+        data = result.data
+        assert data['table_info']['rows'] == 1
+        assert data['table_info']['columns'] == 1
+        assert data['merge_analysis']['merged_cells_count'] == 0
+        assert len(data['cells']) == 1
+        assert len(data['cells'][0]) == 1
+
+    @pytest.mark.unit
+    def test_analyze_table_structure_invalid_table(self, document_manager, table_operations, test_doc_path):
+        """Test analyzing non-existent table."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        result = table_operations.analyze_table_structure(str(test_doc_path), 999)
+        
+        assert result.status == ResponseStatus.ERROR
+        assert "out of range" in result.message or "Invalid table index" in result.message or "Table not found" in result.message
+
+    @pytest.mark.unit
+    def test_analyze_all_tables_empty_document(self, document_manager, table_operations, test_doc_path):
+        """Test analyzing all tables in an empty document."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        result = table_operations.analyze_all_tables(str(test_doc_path))
+        
+        assert result.status == ResponseStatus.SUCCESS
+        
+        data = result.data
+        
+        # For empty documents, the response structure is different
+        if 'file_info' in data:
+            file_info = data['file_info']
+            assert file_info['total_tables'] == 0
+            assert len(data['tables']) == 0
+            assert str(test_doc_path) in file_info['path']
+            assert 'analysis_timestamp' in file_info
+        else:
+            # Fallback for the simple response structure
+            assert data['total_tables'] == 0
+            assert len(data['tables']) == 0
+            assert str(test_doc_path) in data['file_path']
+
+    @pytest.mark.unit
+    def test_analyze_all_tables_multiple_tables(self, document_manager, table_operations, test_doc_path):
+        """Test analyzing all tables in a document with multiple tables."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        # Create multiple tables with different characteristics
+        table_operations.create_table(str(test_doc_path), rows=3, cols=4, headers=["A", "B", "C", "D"])
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        table_operations.create_table(str(test_doc_path), rows=5, cols=3, headers=["X", "Y", "Z"])
+        
+        result = table_operations.analyze_all_tables(str(test_doc_path), include_cell_details=False)
+        
+        assert result.status == ResponseStatus.SUCCESS
+        
+        data = result.data
+        file_info = data['file_info']
+        tables = data['tables']
+        
+        assert file_info['total_tables'] == 3
+        assert len(tables) == 3
+        
+        # Check first table
+        table1 = tables[0]
+        assert table1['table_info']['index'] == 0
+        assert table1['table_info']['rows'] == 3
+        assert table1['table_info']['columns'] == 4
+        assert table1['header_info']['has_header'] is True
+        
+        # Check second table
+        table2 = tables[1]
+        assert table2['table_info']['index'] == 1
+        assert table2['table_info']['rows'] == 2
+        assert table2['table_info']['columns'] == 2
+        
+        # Check third table
+        table3 = tables[2]
+        assert table3['table_info']['index'] == 2
+        assert table3['table_info']['rows'] == 5
+        assert table3['table_info']['columns'] == 3
+        assert table3['header_info']['has_header'] is True
+
+    @pytest.mark.unit
+    def test_analyze_all_tables_with_cell_details(self, document_manager, table_operations, test_doc_path):
+        """Test analyzing all tables with detailed cell information."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        # Create a simple table
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2, headers=["Col1", "Col2"])
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 0, "Data1")
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 1, "Data2")
+        
+        result = table_operations.analyze_all_tables(str(test_doc_path), include_cell_details=True)
+        
+        assert result.status == ResponseStatus.SUCCESS
+        
+        data = result.data
+        assert data['file_info']['total_tables'] == 1
+        
+        # The analyze_all_tables method currently returns simplified table data
+        # This is by design to avoid overwhelming responses for documents with many tables
+        tables = data['tables']
+        assert len(tables) == 1
+        
+        table = tables[0]
+        assert table['table_info']['rows'] == 2
+        assert table['table_info']['columns'] == 2
+        assert table['header_info']['has_header'] is True
+
+    @pytest.mark.unit
+    def test_analyze_table_structure_style_consistency(self, document_manager, table_operations, test_doc_path):
+        """Test style consistency analysis."""
+        from docx.shared import RGBColor
+        
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        # Create table
+        table_operations.create_table(str(test_doc_path), rows=3, cols=2)
+        
+        # Add some data
+        table_operations.set_cell_value(str(test_doc_path), 0, 0, 0, "Header1")
+        table_operations.set_cell_value(str(test_doc_path), 0, 0, 1, "Header2")
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 0, "Data1")
+        table_operations.set_cell_value(str(test_doc_path), 0, 1, 1, "Data2")
+        table_operations.set_cell_value(str(test_doc_path), 0, 2, 0, "Data3")
+        table_operations.set_cell_value(str(test_doc_path), 0, 2, 1, "Data4")
+        
+        # Apply mixed formatting to test consistency detection
+        document = document_manager.get_document(str(test_doc_path))
+        table = document.tables[0]
+        
+        # Make some cells bold, others not
+        table.cell(0, 0).paragraphs[0].runs[0].font.bold = True
+        table.cell(1, 0).paragraphs[0].runs[0].font.bold = False
+        
+        result = table_operations.analyze_table_structure(str(test_doc_path), 0)
+        
+        assert result.status == ResponseStatus.SUCCESS
+        
+        data = result.data
+        style_summary = data['style_summary']
+        
+        # Should detect various styles
+        assert isinstance(style_summary['font_families'], list)
+        assert isinstance(style_summary['font_sizes'], list)
+        assert isinstance(style_summary['colors'], list)
+        assert isinstance(style_summary['background_colors'], list)
+
+    @pytest.mark.unit
+    def test_analyze_table_structure_nonexistent_document(self, table_operations):
+        """Test analyzing table in non-existent document."""
+        result = table_operations.analyze_table_structure("nonexistent.docx", 0)
+        
+        assert result.status == ResponseStatus.ERROR
+        assert "not loaded" in result.message
+
+    @pytest.mark.unit
+    def test_analyze_all_tables_nonexistent_document(self, table_operations):
+        """Test analyzing all tables in non-existent document."""
+        result = table_operations.analyze_all_tables("nonexistent.docx")
+        
+        assert result.status == ResponseStatus.ERROR
+        assert "not loaded" in result.message
+
+    @pytest.mark.integration
+    def test_table_analysis_integration_workflow(self, document_manager, table_operations, test_doc_path):
+        """Test complete table analysis workflow."""
+        document_manager.open_document(str(test_doc_path), create_if_not_exists=True)
+        
+        # Create multiple tables with different characteristics
+        # Table 1: Employee data with headers
+        table_operations.create_table(
+            str(test_doc_path), 
+            rows=4, 
+            cols=3, 
+            headers=["Name", "Role", "Salary"]
+        )
+        
+        employees = [
+            ["Alice Johnson", "Developer", "$80,000"],
+            ["Bob Smith", "Designer", "$70,000"],
+            ["Carol White", "Manager", "$90,000"]
+        ]
+        
+        for row_idx, emp_data in enumerate(employees, 1):
+            for col_idx, value in enumerate(emp_data):
+                table_operations.set_cell_value(str(test_doc_path), 0, row_idx, col_idx, value)
+        
+        # Table 2: Simple data without headers
+        table_operations.create_table(str(test_doc_path), rows=2, cols=2)
+        table_operations.set_cell_value(str(test_doc_path), 1, 0, 0, "Item1")
+        table_operations.set_cell_value(str(test_doc_path), 1, 0, 1, "Value1")
+        table_operations.set_cell_value(str(test_doc_path), 1, 1, 0, "Item2")
+        table_operations.set_cell_value(str(test_doc_path), 1, 1, 1, "Value2")
+        
+        # Step 1: List all tables
+        list_result = table_operations.list_tables(str(test_doc_path))
+        assert list_result.status == ResponseStatus.SUCCESS
+        assert list_result.data['total_count'] == 2
+        
+        # Step 2: Analyze all tables (overview)
+        all_analysis = table_operations.analyze_all_tables(str(test_doc_path), include_cell_details=False)
+        assert all_analysis.status == ResponseStatus.SUCCESS
+        assert all_analysis.data['file_info']['total_tables'] == 2
+        
+        # Step 3: Analyze first table in detail
+        detailed_analysis = table_operations.analyze_table_structure(str(test_doc_path), 0, include_cell_details=True)
+        assert detailed_analysis.status == ResponseStatus.SUCCESS
+        
+        data = detailed_analysis.data
+        assert data['table_info']['rows'] == 4
+        assert data['table_info']['columns'] == 3
+        assert data['header_info']['has_header'] is True
+        assert data['header_info']['header_cells'] == ["Name", "Role", "Salary"]
+        
+        # Verify cell data
+        cells = data['cells']
+        assert len(cells) == 4  # 4 rows
+        assert cells[1][0]['content']['text'] == "Alice Johnson"  # First data row, first column
+        assert cells[1][2]['content']['text'] == "$80,000"       # First data row, salary column
+        
+        # Step 4: Analyze second table
+        table2_analysis = table_operations.analyze_table_structure(str(test_doc_path), 1, include_cell_details=True)
+        assert table2_analysis.status == ResponseStatus.SUCCESS
+        
+        data2 = table2_analysis.data
+        assert data2['table_info']['rows'] == 2
+        assert data2['table_info']['columns'] == 2
+        # Note: Header detection is heuristic-based, so it may detect headers even in simple tables
+        # This is expected behavior when all cells in first row have content
+        
+        # Verify this workflow provides comprehensive table understanding
+        # This is exactly what AI models need to understand table structure before modifications

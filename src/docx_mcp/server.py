@@ -519,6 +519,69 @@ def format_cell_borders(
     return result.to_dict()
 
 
+# Table analysis operations
+@mcp.tool()
+def analyze_table_structure(
+    file_path: str,
+    table_index: int,
+    include_cell_details: bool = True
+) -> Dict[str, Any]:
+    """Analyze the complete structure and styling of a specific table.
+    
+    This function provides comprehensive analysis of table structure including:
+    - Cell merging information (which cells are merged horizontally/vertically)
+    - Text formatting for each cell (font, size, color, bold, italic, etc.)
+    - Cell alignment settings (horizontal and vertical alignment)
+    - Background colors and border styles
+    - Table-level properties and consistency analysis
+    
+    This is particularly useful for AI models to understand the existing table
+    structure and styling before making modifications, ensuring they maintain
+    the original formatting and don't break the table layout.
+    
+    Args:
+        file_path: Path to the document file
+        table_index: Index of the table to analyze (>= 0)
+        include_cell_details: Whether to include detailed cell-level formatting analysis
+    """
+    result = table_operations.analyze_table_structure(
+        file_path,
+        table_index,
+        include_cell_details
+    )
+    return result.to_dict()
+
+
+@mcp.tool()
+def analyze_all_tables_structure(
+    file_path: str,
+    include_cell_details: bool = True
+) -> Dict[str, Any]:
+    """Analyze the structure and styling of all tables in the document.
+    
+    This function provides comprehensive analysis of all tables in the document,
+    including the same detailed information as analyze_table_structure but for
+    every table. This gives AI models a complete understanding of the document's
+    table structure and formatting patterns.
+    
+    The analysis includes:
+    - Complete table inventory with structure details
+    - Cell merging patterns across all tables
+    - Formatting consistency analysis
+    - Style summary (unique fonts, colors, etc. used)
+    - Header detection and analysis
+    
+    Args:
+        file_path: Path to the document file
+        include_cell_details: Whether to include detailed cell-level formatting analysis
+    """
+    result = table_operations.analyze_all_tables(
+        file_path,
+        include_cell_details
+    )
+    return result.to_dict()
+
+
 def main():
     """Main entry point to run the MCP server."""
     import argparse

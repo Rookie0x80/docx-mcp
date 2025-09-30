@@ -8,6 +8,10 @@ from docx.shared import Inches
 
 from ...models.responses import OperationResponse
 from ...models.tables import TableInfo, CellPosition, SearchResult, TableData, TableSearchMatch, TableSearchResult
+from ...models.table_analysis import (
+    TableStructureAnalysis, CellStyleAnalysis, TableAnalysisResult, MergeInfo,
+    CellMergeType, analyze_cell_merge, extract_cell_formatting
+)
 from ...utils.exceptions import (
     TableNotFoundError,
     InvalidTableIndexError,
@@ -858,3 +862,270 @@ class TableOperations:
             
         except Exception as e:
             return OperationResponse.error(f"Failed to search table headers: {str(e)}")
+    
+    def analyze_table_structure(
+        self,
+        file_path: str,
+        table_index: int,
+        include_cell_details: bool = True
+    ) -> OperationResponse:
+        """
+        Analyze the complete structure and styling of a specific table.
+        
+        Args:
+            file_path: Path to the document
+            table_index: Index of the table to analyze
+            include_cell_details: Whether to include detailed cell analysis
+            
+        Returns:
+            OperationResponse with comprehensive table analysis
+        """
+        try:
+            document = self.document_manager.get_document(file_path)
+            if not document:
+                return OperationResponse.error(f"Document not loaded: {file_path}")
+            
+            validate_table_index(table_index, len(document.tables))
+            table = document.tables[table_index]
+            
+            # Basic table information
+            total_rows = len(table.rows)
+            total_columns = len(table.columns) if table.rows else 0
+            
+            # Table-level properties
+            table_style_name = getattr(table.style, 'name', None) if table.style else None
+            
+            # Header detection
+            has_header_row = False
+            header_row_index = None
+            header_cells = None
+            
+            if table.rows:
+                # Simple heuristic: if first row has text in all cells, consider it header
+                first_row = table.rows[0]
+                first_row_texts = [cell.text.strip() for cell in first_row.cells]
+                has_header_row = all(text for text in first_row_texts)
+                
+                if has_header_row:
+                    header_row_index = 0
+                    header_cells = first_row_texts
+            
+            # Initialize cell analysis storage
+            cells = []
+            merge_regions = []
+            merged_cells_count = 0
+            
+            # Style tracking for consistency analysis
+            font_families = set()
+            font_sizes = set()
+            colors = set()
+            background_colors = set()
+            alignments = set()
+            border_styles = set()
+            
+            # Analyze each cell
+            for row_idx, row in enumerate(table.rows):
+                cell_row = []
+                for col_idx, cell in enumerate(row.cells):
+                    # Extract cell content
+                    text_content = cell.text
+                    is_empty = not text_content.strip()
+                    
+                    # Analyze merge information
+                    merge_info = analyze_cell_merge(cell, row_idx, col_idx)
+                    if merge_info:
+                        merge_regions.append(merge_info)
+                        merged_cells_count += 1
+                    
+                    # Extract formatting if detailed analysis is requested
+                    cell_analysis = None
+                    if include_cell_details:
+                        formatting = extract_cell_formatting(cell)
+                        
+                        # Track unique styles
+                        if formatting["font_family"]:
+                            font_families.add(formatting["font_family"])
+                        if formatting["font_size"]:
+                            font_sizes.add(formatting["font_size"])
+                        if formatting["font_color"]:
+                            colors.add(formatting["font_color"])
+                        if formatting["background_color"]:
+                            background_colors.add(formatting["background_color"])
+                        if formatting["horizontal_alignment"]:
+                            alignments.add(formatting["horizontal_alignment"])
+                        
+                        # Track border styles
+                        for border_side, border_info in formatting["borders"].items():
+                            if border_info and border_info.get("style"):
+                                border_styles.add(border_info["style"])
+                        
+                        cell_analysis = CellStyleAnalysis(
+                            row_index=row_idx,
+                            column_index=col_idx,
+                            text_content=text_content,
+                            is_empty=is_empty,
+                            merge_info=merge_info,
+                            font_family=formatting["font_family"],
+                            font_size=formatting["font_size"],
+                            font_color=formatting["font_color"],
+                            is_bold=formatting["is_bold"],
+                            is_italic=formatting["is_italic"],
+                            is_underlined=formatting["is_underlined"],
+                            is_strikethrough=formatting["is_strikethrough"],
+                            horizontal_alignment=formatting["horizontal_alignment"],
+                            vertical_alignment=formatting["vertical_alignment"],
+                            background_color=formatting["background_color"],
+                            top_border=formatting["borders"]["top"],
+                            bottom_border=formatting["borders"]["bottom"],
+                            left_border=formatting["borders"]["left"],
+                            right_border=formatting["borders"]["right"],
+                            width=None,  # Could be implemented if needed
+                            height=None  # Could be implemented if needed
+                        )
+                    else:
+                        # Minimal cell analysis without formatting details
+                        cell_analysis = CellStyleAnalysis(
+                            row_index=row_idx,
+                            column_index=col_idx,
+                            text_content=text_content,
+                            is_empty=is_empty,
+                            merge_info=merge_info,
+                            font_family=None,
+                            font_size=None,
+                            font_color=None,
+                            is_bold=False,
+                            is_italic=False,
+                            is_underlined=False,
+                            is_strikethrough=False,
+                            horizontal_alignment=None,
+                            vertical_alignment=None,
+                            background_color=None,
+                            top_border=None,
+                            bottom_border=None,
+                            left_border=None,
+                            right_border=None,
+                            width=None,
+                            height=None
+                        )
+                    
+                    cell_row.append(cell_analysis)
+                
+                cells.append(cell_row)
+            
+            # Style consistency analysis
+            consistent_fonts = len(font_families) <= 1
+            consistent_alignment = len(alignments) <= 1
+            consistent_borders = len(border_styles) <= 1
+            
+            # Create table structure analysis
+            table_analysis = TableStructureAnalysis(
+                table_index=table_index,
+                total_rows=total_rows,
+                total_columns=total_columns,
+                table_style_name=table_style_name,
+                table_alignment=None,  # Could be implemented if needed
+                table_width=None,      # Could be implemented if needed
+                has_header_row=has_header_row,
+                header_row_index=header_row_index,
+                header_cells=header_cells,
+                cells=cells,
+                merged_cells_count=merged_cells_count,
+                merge_regions=merge_regions,
+                consistent_fonts=consistent_fonts,
+                consistent_alignment=consistent_alignment,
+                consistent_borders=consistent_borders,
+                unique_font_families=list(font_families),
+                unique_font_sizes=list(font_sizes),
+                unique_colors=list(colors),
+                unique_background_colors=list(background_colors)
+            )
+            
+            return OperationResponse.success(
+                f"Table {table_index} structure analyzed successfully",
+                table_analysis.to_dict()
+            )
+            
+        except (InvalidTableIndexError,) as e:
+            return OperationResponse.error(str(e))
+        except Exception as e:
+            return OperationResponse.error(f"Failed to analyze table structure: {str(e)}")
+    
+    def analyze_all_tables(
+        self,
+        file_path: str,
+        include_cell_details: bool = True
+    ) -> OperationResponse:
+        """
+        Analyze the structure and styling of all tables in the document.
+        
+        Args:
+            file_path: Path to the document
+            include_cell_details: Whether to include detailed cell analysis
+            
+        Returns:
+            OperationResponse with analysis of all tables
+        """
+        try:
+            from datetime import datetime
+            
+            document = self.document_manager.get_document(file_path)
+            if not document:
+                return OperationResponse.error(f"Document not loaded: {file_path}")
+            
+            if not document.tables:
+                return OperationResponse.success(
+                    "No tables found in document",
+                    {"file_path": file_path, "total_tables": 0, "tables": []}
+                )
+            
+            table_analyses = []
+            
+            # Analyze each table
+            for table_idx in range(len(document.tables)):
+                analysis_response = self.analyze_table_structure(
+                    file_path, table_idx, include_cell_details
+                )
+                
+                if analysis_response.success:
+                    # Extract the table analysis from the response data
+                    table_data = analysis_response.data
+                    table_analyses.append(TableStructureAnalysis(
+                        table_index=table_data["table_info"]["index"],
+                        total_rows=table_data["table_info"]["rows"],
+                        total_columns=table_data["table_info"]["columns"],
+                        table_style_name=table_data["table_info"]["style_name"],
+                        table_alignment=table_data["table_info"]["alignment"],
+                        table_width=table_data["table_info"]["width"],
+                        has_header_row=table_data["header_info"]["has_header"],
+                        header_row_index=table_data["header_info"]["header_row_index"],
+                        header_cells=table_data["header_info"]["header_cells"],
+                        cells=[],  # We'll populate this if needed
+                        merged_cells_count=table_data["merge_analysis"]["merged_cells_count"],
+                        merge_regions=[],  # We'll populate this if needed
+                        consistent_fonts=table_data["style_consistency"]["fonts"],
+                        consistent_alignment=table_data["style_consistency"]["alignment"],
+                        consistent_borders=table_data["style_consistency"]["borders"],
+                        unique_font_families=table_data["style_summary"]["font_families"],
+                        unique_font_sizes=table_data["style_summary"]["font_sizes"],
+                        unique_colors=table_data["style_summary"]["colors"],
+                        unique_background_colors=table_data["style_summary"]["background_colors"]
+                    ))
+                else:
+                    # If individual table analysis fails, log it but continue
+                    continue
+            
+            # Create comprehensive analysis result
+            analysis_result = TableAnalysisResult(
+                file_path=file_path,
+                total_tables=len(table_analyses),
+                analysis_timestamp=datetime.now().isoformat(),
+                tables=table_analyses
+            )
+            
+            return OperationResponse.success(
+                f"Analyzed {len(table_analyses)} tables successfully",
+                analysis_result.to_dict()
+            )
+            
+        except Exception as e:
+            return OperationResponse.error(f"Failed to analyze all tables: {str(e)}")
